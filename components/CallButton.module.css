@@ -8,18 +8,18 @@
 .purpose { margin: 20px 0 0; color: #e2d6bc; font-size: 12px; }
 .purpose > span { display: block; margin-top: 7px; color: #ae9d7e; font: 8px var(--font-mono, monospace); letter-spacing: 1.5px; }
 .avatarWrap { position: relative; display: grid; place-items: center; width: 112px; height: 112px; margin: 25px auto 17px; }
-.avatar { position: relative; display: grid; place-items: center; width: 82px; height: 82px; border: 1px solid #c8a24a99; border-radius: 50%; color: #e4c36f; background: #2d2619; font: 29px var(--font-display, Georgia, serif); }
+.avatar { position: relative; display: grid; place-items: center; width: 82px; height: 82px; border: 1px solid #c8a24a99; border-radius: 50%; color: #e4c36f; background: #2d2619; font: 500 29px var(--font-display, Georgia, serif); }
 .ringOne, .ringTwo { position: absolute; inset: 6px; border: 1px solid #c8a24a30; border-radius: 50%; }
 .ringTwo { inset: -2px; }
 .ringing .ringOne, .ringing .ringTwo { animation: ring 2.4s ease-out infinite; }
 .ringing .ringTwo { animation-delay: 1.2s; }
-.customer { margin: 0 0 7px; color: #f8efdf; font: 28px/1.3 var(--font-display, Georgia, serif); overflow-wrap: anywhere; }
+.customer { margin: 0 0 7px; color: #f8efdf; font: 500 28px/1.3 var(--font-display, Georgia, serif); overflow-wrap: anywhere; }
 .description { margin: 0; color: #bfb196; font: 11px/1.6 var(--font-mono, monospace); overflow-wrap: anywhere; }
 .status { display: flex; justify-content: center; align-items: center; gap: 8px; min-height: 28px; margin-top: 12px; color: #e0c88f; font-size: 12px; }
 .statusDot { width: 5px; height: 5px; border-radius: 50%; background: var(--gold, #c8a24a); }
 .connectedDot { background: #83b889; box-shadow: 0 0 8px #83b88955; }
 .completedTick { color: #83b889; }
-.hinglish { font: 19px var(--font-hand, cursive); }
+.hinglish { font: 14px var(--font-hand, cursive); }
 .timer { padding-left: 9px; margin-left: 3px; border-left: 1px solid #c8a24a40; color: #cabfa8; font: 11px var(--font-mono, monospace); font-variant-numeric: tabular-nums; }
 .waveform { display: flex; justify-content: center; align-items: center; gap: 4px; height: 62px; margin: 14px auto 2px; }
 .waveform span { height: 4px; width: 3px; border-radius: 4px; background: #c8a24a88; transition: height .25s; }
@@ -28,14 +28,14 @@
 .voice > span:first-child { color: var(--gold, #c8a24a); margin-right: 6px; }
 .voiceDivider { color: #6e6048; margin: 0 5px; }
 .connectingNote { font-size: 12px; line-height: 1.7; color: #c0b397; margin: 20px 0 26px; }
-.connectingNote span { font: 18px var(--font-hand, cursive); color: #d9bd77; }
+.connectingNote span { font: 15px var(--font-hand, cursive); color: #d9bd77; }
 .transcript { position: relative; background: #221d15; border: 1px solid #c8a24a30; border-radius: 2px 12px 12px; padding: 16px 18px; margin: 20px 0 24px; text-align: left; }
 .transcriptLabel { display: flex; justify-content: space-between; color: #c8a24a; font: 8px var(--font-mono, monospace); letter-spacing: 1.4px; gap: 12px; }
 .transcriptLabel span { color: #ae9b74; }
 .transcript p { margin: 13px 0 0; font-size: 14px; line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; }
 .playPrompt { padding: 12px; margin: 12px 0 20px; border: 1px dashed #c8a24a50; }
 .playPrompt p { color: #d6c5a2; font-size: 12px; line-height: 1.6; margin: 0 0 12px; }
-.playButton { border: 1px solid var(--gold, #c8a24a); color: #17130d; background: #d6b76d; padding: 12px 20px; border-radius: 3px; font: 600 12px var(--font-body, sans-serif); cursor: pointer; }
+.playButton { border: 1px solid var(--gold, #c8a24a); color: #17130d; background: #d6b76d; padding: 12px 20px; border-radius: 3px; font: 500 12px var(--font-body, sans-serif); cursor: pointer; }
 .callControls { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 20px; }
 .endButton { display: flex; flex-direction: column; align-items: center; gap: 9px; border: 0; color: #f2e9d8; background: transparent; cursor: pointer; font: 11px var(--font-body, sans-serif); }
 .hangupIcon { box-sizing: content-box; display: block; width: 23px; height: 23px; padding: 16px; background: #a3201b; border: 1px solid #ce493b; border-radius: 50%; transform: rotate(135deg); box-shadow: 0 4px 15px #0004; }

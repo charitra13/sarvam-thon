@@ -17,6 +17,11 @@
   --radius: 4px;
   --shadow: 0 1px 0 rgba(255, 255, 255, .6) inset, 0 1px 2px rgba(60, 40, 10, .08), 0 10px 30px -18px rgba(60, 40, 10, .45);
   --ease: cubic-bezier(.2, .7, .2, 1);
+  /* One typeface everywhere. Helvetica Neue ships with Apple devices; elsewhere it falls back to Helvetica or Arial. */
+  --font-body: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-display: var(--font-body);
+  --font-mono: var(--font-body);
+  --font-hand: var(--font-body);
   color-scheme: light;
 }
 
@@ -47,7 +52,7 @@ a { color: inherit; }
 ::selection { background: rgba(200, 162, 74, .45); }
 :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 2px; }
 
-h1, h2, h3 { font-family: var(--font-display), Georgia, serif; font-weight: 400; letter-spacing: -.01em; margin: 0; }
+h1, h2, h3 { font-family: var(--font-display), Georgia, serif; font-weight: 500; letter-spacing: -.02em; margin: 0; }
 h2 { font-size: 1.35rem; }
 h3 { font-size: 1.05rem; }
 
@@ -58,7 +63,7 @@ h3 { font-size: 1.05rem; }
 .debit { color: var(--red); }
 .credit { color: var(--green); }
 .eyebrow {
-  font: 600 .7rem/1 var(--font-mono), monospace;
+  font: 500 .7rem/1 var(--font-mono), monospace;
   letter-spacing: .14em;
   text-transform: uppercase;
   color: var(--ink-soft);
@@ -106,9 +111,9 @@ h3 { font-size: 1.05rem; }
   color: transparent;
 }
 .brand { position: relative; text-decoration: none; display: grid; gap: 2px; padding: 6px 10px 0; }
-.brand__mark { font-family: var(--font-display), serif; font-size: 2.1rem; line-height: 1; }
-.brand__sub { font-family: var(--font-hand), cursive; font-size: 1.05rem; color: rgba(241, 213, 138, .8); }
-.brand__auspice { font-family: var(--font-hand), cursive; font-size: .8rem; letter-spacing: .3em; color: rgba(241, 213, 138, .55); }
+.brand__mark { font-family: var(--font-display), serif; font-size: 2.1rem; font-weight: 700; line-height: 1; letter-spacing: -.03em; }
+.brand__sub { font-family: var(--font-hand), cursive; font-size: .85rem; color: rgba(241, 213, 138, .8); }
+.brand__auspice { font-family: var(--font-hand), cursive; font-size: .8rem; word-spacing: .3em; color: rgba(241, 213, 138, .55); }
 
 .nav { position: relative; display: grid; gap: 2px; }
 .nav a {
@@ -139,10 +144,8 @@ h3 { font-size: 1.05rem; }
 .page-head .annot {
   margin: 4px 0 0;
   font-family: var(--font-hand), cursive;
-  font-size: 1.15rem;
+  font-size: 1rem;
   color: var(--blue);
-  transform: rotate(-1.2deg);
-  transform-origin: left;
 }
 
 /* ---------- Surfaces ---------- */
@@ -169,7 +172,7 @@ h3 { font-size: 1.05rem; }
   border-radius: 3px;
   background: transparent;
   color: var(--b);
-  font: 600 .9rem var(--font-body), sans-serif;
+  font: 500 .9rem var(--font-body), sans-serif;
   text-decoration: none;
   cursor: pointer;
   transition: transform .15s var(--ease), background .2s var(--ease), box-shadow .2s var(--ease);
@@ -187,7 +190,7 @@ h3 { font-size: 1.05rem; }
 .btn--red:active { box-shadow: 0 1px 0 var(--red-deep); }
 .btn--ghost { --b: var(--ink-soft); border-color: transparent; text-decoration: underline; text-underline-offset: 4px; padding: 0 8px; }
 
-.field { display: grid; gap: 5px; font-size: .8rem; font-weight: 600; color: var(--ink-soft); }
+.field { display: grid; gap: 5px; font-size: .8rem; font-weight: 500; color: var(--ink-soft); }
 .field input, .field select, .field textarea, input.input, select.input {
   width: 100%;
   min-height: 40px;
@@ -202,8 +205,8 @@ h3 { font-size: 1.05rem; }
 }
 .field input:focus, .field select:focus, .field textarea:focus, .input:focus { outline: none; border-color: var(--blue); background: #fff; }
 
-.error { color: var(--red); font-weight: 600; font-size: .88rem; }
-.ok { color: var(--green); font-weight: 600; font-size: .88rem; }
+.error { color: var(--red); font-weight: 500; font-size: .88rem; }
+.ok { color: var(--green); font-weight: 500; font-size: .88rem; }
 
 /* ---------- Ledger table ---------- */
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -211,7 +214,7 @@ h3 { font-size: 1.05rem; }
 .ledger th {
   padding: 8px 12px;
   text-align: left;
-  font: 600 .68rem var(--font-mono), monospace;
+  font: 500 .68rem var(--font-mono), monospace;
   letter-spacing: .12em;
   text-transform: uppercase;
   color: var(--red-deep);
