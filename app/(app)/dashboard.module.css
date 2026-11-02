@@ -8,11 +8,11 @@
 .total { display: grid; gap: 4px; padding: 16px 18px 14px; }
 .total + .total { border-left: 1px solid rgba(163, 32, 27, .35); }
 .total strong { font-size: clamp(1.6rem, 3vw, 2.3rem); font-weight: 500; line-height: 1.1; letter-spacing: -.02em; }
-.total .hand { font-size: 1rem; }
+.total .hand { font-size: .85rem; }
 .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 22px; align-items: start; }
 .wide { grid-column: 1 / -1; }
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.head .hand { font-size: .95rem; }
+.head .hand { font-size: .85rem; }
 .todo, .stock, .calls { list-style: none; margin: 0; padding: 0; }
 .todo li {
   display: grid;
@@ -23,7 +23,7 @@
   border-bottom: 1px solid rgba(36, 64, 142, .14);
 }
 .todo li > div { display: grid; min-width: 0; }
-.todo li a:not([class]) { font-weight: 600; text-decoration: none; }
+.todo li a:not([class]) { font-weight: 500; text-decoration: none; }
 .todo li a:not([class]):hover { color: var(--red); }
 .stock li, .calls li {
   display: flex;

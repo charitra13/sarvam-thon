@@ -1,5 +1,10 @@
 # Version history
 
+## 0.4.0
+
+- Switch the whole UI to Helvetica Neue (Helvetica/Arial fallback) and drop the four Google fonts. Colors
+  and the ledger theme are unchanged; heading weights, note sizes and label weights are retuned for the new face.
+
 ## 0.3.0
 
 - Open the hackathon demo directly on the dashboard without login, remove sign-out and session
