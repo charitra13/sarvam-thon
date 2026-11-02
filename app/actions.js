@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import * as data from "../lib/data.js";
 import { readSlip, matchSlip, callScript, speak } from "../lib/sarvam.js";
-import { aliasKey, aliasLearnable } from "../lib/catalog.js";
+import { validateInvoice } from "../lib/invoice.js";
 
 // Logs the real error server-side and hands the UI a friendly message.
 async function attempt(message, fn) {
@@ -31,45 +31,25 @@ export async function readSlipAction(formData) {
 
 export async function matchSlipAction(text) {
   if (typeof text !== "string" || !text.trim()) return { error: "There is no slip text to match." };
-  return attempt("Sarvam-105B could not match the items. Please try again.", async () =>
-    matchSlip(text.slice(0, 8000), await data.listItems(), { aliases: await data.listAliases() }));
+  if (text.length > 16000 || text.split("\n").length > 180) return { error: "This slip is too long. Scan one page at a time." };
+  return attempt("Sarvam-105B could not match the items. Please try again.", async () => {
+    const items = await data.listItems();
+    const support = await data.getAliasSupport();
+    return { ...await matchSlip(text, items, { aliases: support.aliases }), aliases_available: support.available };
+  });
 }
 
 export async function saveInvoiceAction(payload) {
-  const name = String(payload?.customer?.name ?? "").trim();
-  if (!name) return { error: "Add the customer name." };
-  const raw = Array.isArray(payload?.lines) ? payload.lines : [];
-  const lines = raw
-    .map((l) => {
-      const line = {
-        item_id: Number.isInteger(l.item_id) ? l.item_id : null,
-        raw_text: l.raw_text ? String(l.raw_text).slice(0, 500) : null,
-        name: String(l.name ?? "").trim().slice(0, 200),
-        qty: toInt(l.qty),
-        unit_price: toMoney(l.unit_price),
-      };
-      // Keep the written slip amount only when it agrees with qty × rate within rounding.
-      const written = toMoney(l.line_total);
-      if (l.line_total != null && Number.isFinite(written) && Math.abs(written - line.qty * line.unit_price) <= 0.5) line.line_total = written;
-      return line;
-    })
-    .filter((l) => l.name && l.qty > 0 && l.unit_price >= 0);
-  if (!lines.length) return { error: "Add at least one item with a quantity." };
-  // Only lines where the person ticked "remember" after choosing the item themselves teach an alias.
-  const aliases = raw
-    .filter((l) => l.remember === true && Number.isInteger(l.item_id) && typeof l.description === "string")
-    .map((l) => ({ alias: aliasKey(l.description.slice(0, 200)), item_id: l.item_id }))
-    .filter((a) => aliasLearnable(a.alias));
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(payload.invoice_date ?? "") ? payload.invoice_date : null;
+  const valid = validateInvoice(payload);
+  if (valid.error) return valid;
   return attempt("Could not save the invoice. Please try again.", async () => {
-    const id = await data.createInvoice({
-      customer: { name: name.slice(0, 200), phone: String(payload.customer.phone ?? "").trim().slice(0, 30) },
-      invoice_no: String(payload.invoice_no ?? "").trim().slice(0, 40) || null,
-      invoice_date: date,
-      ocr_text: payload.ocr_text ? String(payload.ocr_text).slice(0, 10000) : null,
-      lines,
-      aliases,
-    });
+    let id;
+    try {
+      id = await data.createInvoice(valid.invoice);
+    } catch (error) {
+      if (error.code === "ALIASES_UNAVAILABLE") return { error: "Remembering names is currently unavailable. Save again to record this invoice without remembering names.", aliases_available: false };
+      throw error;
+    }
     revalidatePath("/", "layout");
     return { id };
   });

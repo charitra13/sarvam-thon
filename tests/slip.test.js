@@ -22,6 +22,7 @@ describe("readFigure", () => {
     expect(readFigure("0").value).toBe(0);
     expect(readFigure("")).toBeNull();
     expect(readFigure("16x26")).toBeNull();
+    expect(readFigure("-5")).toBeNull();
   });
 });
 
@@ -69,7 +70,7 @@ describe("Ankur (Hindi OCR)", () => {
   test("row 16 keeps qty 24; '241' is 24/- confirmed by 576", () => {
     const row = slip.bySno.get(16);
     expect(row).toMatchObject({ qty: 24, unit_price: 24, amount: 576 });
-    expect(checks(row)).toEqual([]);
+    expect(checks(row)).toHaveLength(1);
     expect(row.issues[0].message).toContain("24/-");
   });
 
@@ -81,6 +82,7 @@ describe("Ankur (Hindi OCR)", () => {
     expect(slip.bySno.get(7).unit_price).toBe(90);
     expect(slip.bySno.get(15).unit_price).toBe(450);
     expect(slip.bySno.get(18).unit_price).toBe(70);
+    for (const sno of [5, 7, 15, 18]) expect(checks(slip.bySno.get(sno))).toHaveLength(1);
   });
 
   test("rows whose rate disagrees with the amount need a check", () => {
@@ -125,12 +127,18 @@ describe("rows with missing or odd cells", () => {
   test("an explicitly empty rate cell in a table is worked out from the amount", () => {
     const [line] = rows("| 1 | 100 | Doms pencil |  | 410 |");
     expect(line).toMatchObject({ qty: 100, unit_price: 4.1, line_total: 410 });
-    expect(checks(line)).toEqual([]);
+    expect(checks(line)).toHaveLength(1);
   });
 
   test("true zeroes are kept", () => {
     const [line] = rows("4 10 Free sample 0 0");
     expect(line).toMatchObject({ unit_price: 0, amount: 0, line_total: 0 });
+  });
+
+  test("letter/digit look-alikes are visible doubts even when arithmetic agrees", () => {
+    const [line] = rows("1 1O0 Pencil 4/10 4I0");
+    expect(line).toMatchObject({ qty: 100, unit_price: 4.1, line_total: 410 });
+    expect(checks(line)).toHaveLength(2);
   });
 
   test("rounding residue keeps the written amount: 3 × 333.33 = 1000", () => {
@@ -150,4 +158,23 @@ describe("rows with missing or odd cells", () => {
     expect(slip.lines[0]).toMatchObject({ sno: 4, mark: "①", qty: 75 });
     expect(slip.figures[0]).toMatchObject({ sno: 9, value: 80 });
   });
+
+  test("a structured row with quantity but no description remains an unresolved item", () => {
+    const [line] = rows("| 1 | 25 | | | |");
+    expect(line).toMatchObject({ qty: 25, description: "", unit_price: null });
+    expect(checks(line).some((issue) => issue.message.includes("description"))).toBe(true);
+    expect(rows("1 25 5 125")[0]).toMatchObject({ qty: 25, description: "", unit_price: 5, amount: 125 });
+  });
+
+  test("non-item notes and labelled totals survive parsing", () => {
+    const slip = read("1 10 Pencil 5 50\n2 Total 50\nPacking charge 80\nPay after delivery");
+    expect(slip.lines).toHaveLength(1);
+    expect(slip.figures.map((f) => f.value)).toEqual([50, 80]);
+    expect(slip.notes).toContain("Pay after delivery");
+  });
+});
+
+test("the captured default en-IN OCR keeps all 18 rows and their obvious quantities", () => {
+  const slip = read(slips["ankur-en"]);
+  expect(slip.lines.map((l) => l.qty)).toEqual([100, 60, 100, 100, 200, 5, 2, 1, 50, 200, 200, 250, 3, 15, 1, 24, 2, 5]);
 });

@@ -71,7 +71,7 @@
 .numberInput { width: 61px; }
 .rateInput { width: 85px; }
 .numberInput, .rateInput { text-align: right; font: 12px var(--font-mono, monospace); font-variant-numeric: tabular-nums; }
-.amount { white-space: nowrap; font-size: 12px; padding-top: 25px !important; }
+.amount { min-width: 104px; white-space: normal; font-size: 12px; }
 .checkLine { background: #c77d1208; }
 .confidence { display: flex; gap: 6px; align-items: center; margin-top: 9px; color: var(--green, #2f6b3a); font-size: 9px; white-space: nowrap; }
 .confidence meter { width: 35px; height: 7px; accent-color: var(--green, #2f6b3a); }
