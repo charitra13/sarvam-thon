@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { readSlipAction, matchSlipAction, saveInvoiceAction } from "../app/actions.js";
 import styles from "./ScanFlow.module.css";
 
 const money = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
 const steps = ["Sarvam Vision reading the slip", "Sarvam-105B matching inventory", "Review"];
+const near = (a, b) => Math.abs(a - b) <= 0.5;
+// The written slip amount is kept as the line total while it still agrees with qty × rate.
+const lineTotal = (line) => {
+  const computed = (Number(line.qty) || 0) * (Number(line.unit_price) || 0);
+  return line.amount != null && near(computed, line.amount) ? line.amount : computed;
+};
 
 async function prepareImage(file) {
   if (!file || !file.type.startsWith("image/")) throw new Error("image");
@@ -65,6 +71,7 @@ export default function ScanFlow({ items = [] }) {
   const [customer, setCustomer] = useState({ name: "", phone: "" });
   const [bill, setBill] = useState({ number: "", date: "" });
   const [lines, setLines] = useState([]);
+  const [warnings, setWarnings] = useState([]);
   const [saving, setSaving] = useState(false);
   const busy = preparing || stage === "reading" || stage === "matching" || saving;
   const activeStep = stage === "reading" ? 0 : stage === "matching" ? 1 : stage === "review" ? 2 : -1;
@@ -81,7 +88,8 @@ export default function ScanFlow({ items = [] }) {
     return Array.from(groups);
   }, [items]);
   const itemsById = useMemo(() => new Map(items.map((item) => [String(item.id), item])), [items]);
-  const total = lines.reduce((sum, line) => sum + (Number(line.qty) || 0) * (Number(line.unit_price) || 0), 0);
+  const total = lines.reduce((sum, line) => sum + lineTotal(line), 0);
+  const unchecked = lines.filter((line) => line.needs_review && !line.reviewed).length;
   const quantities = lines.reduce((map, line) => {
     if (line.item_id) map.set(String(line.item_id), (map.get(String(line.item_id)) || 0) + (Number(line.qty) || 0));
     return map;
@@ -191,12 +199,18 @@ export default function ScanFlow({ items = [] }) {
       const date = first("invoice_date");
       setCustomer({ name: first("customer_name"), phone: first("customer_phone") });
       setBill({ number: [...new Set(results.map((result) => result.invoice_no).filter(Boolean))].join(", "), date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "" });
+      setWarnings(results.flatMap((result, index) => (result.warnings ?? []).map((warning) => ({ ...warning, slip: many ? index + 1 : null }))));
       setLines(results.flatMap((result) => result.items).map((line) => {
         const item = itemsById.get(String(line.item_id));
         return {
           key: nextLine.current++, raw: line.raw || "", item_id: item?.id ?? null,
-          name: item?.name || line.name || line.raw || "", qty: line.qty ?? 1,
-          unit_price: line.unit_price ?? "", confidence: Math.max(0, Math.min(1, Number(line.confidence) || 0)),
+          name: item?.name || line.name || line.raw || "",
+          // Missing figures stay empty: they are never filled with 1 or the catalog price.
+          qty: line.qty ?? "", unit_price: line.unit_price ?? "", amount: line.amount ?? null,
+          confidence: item ? Math.max(0, Math.min(1, Number(line.confidence) || 0)) : 0,
+          description: line.description || "", cells: { sno: line.sno, qty: line.qty_text, rate: line.rate_text, amount: line.amount_text },
+          candidates: Array.isArray(line.candidates) ? line.candidates : [], issues: Array.isArray(line.issues) ? line.issues : [],
+          needs_review: Boolean(line.needs_review), reviewed: false, picked: false, remember: false,
         };
       }));
       setFailedAt(null);
@@ -219,17 +233,18 @@ export default function ScanFlow({ items = [] }) {
 
   function selectItem(line, value) {
     const item = itemsById.get(value);
-    updateLine(line.key, item ? {
-      item_id: item.id, name: item.name, confidence: 1,
-      unit_price: line.unit_price === "" || line.unit_price == null ? item.sell_price : line.unit_price,
-    } : { item_id: null, confidence: 0 });
+    updateLine(line.key, item ? { item_id: item.id, name: item.name, confidence: 1, picked: true } : { item_id: null, confidence: 0, picked: false, remember: false });
   }
 
   async function save(event) {
     event.preventDefault();
     if (work.current) return;
-    if (!customer.name.trim() || !lines.length || lines.some((line) => !line.name.trim() || !Number.isInteger(Number(line.qty)) || Number(line.qty) <= 0 || line.unit_price === "" || !Number.isFinite(Number(line.unit_price)) || Number(line.unit_price) < 0)) {
+    if (!customer.name.trim() || !lines.length || lines.some((line) => !line.name.trim() || line.qty === "" || !Number.isInteger(Number(line.qty)) || Number(line.qty) <= 0 || line.unit_price === "" || !Number.isFinite(Number(line.unit_price)) || Number(line.unit_price) < 0)) {
       setError("Add a customer name and at least one item. Check that every line has a name, a whole quantity above zero and a valid rate.");
+      return;
+    }
+    if (unchecked) {
+      setError(`${unchecked} ${unchecked === 1 ? "line needs" : "lines need"} a check. Compare the amber notes with the photo, correct anything wrong, then tick “Checked”.`);
       return;
     }
     work.current = true;
@@ -239,7 +254,10 @@ export default function ScanFlow({ items = [] }) {
       const result = await saveInvoiceAction({
         customer: { name: customer.name.trim(), phone: customer.phone.trim() },
         invoice_no: bill.number.trim(), invoice_date: bill.date, ocr_text: ocr,
-        lines: lines.map((line) => ({ item_id: line.item_id, raw_text: line.raw, name: line.name.trim(), qty: Number(line.qty), unit_price: Number(line.unit_price) })),
+        lines: lines.map((line) => ({
+          item_id: line.item_id, raw_text: line.raw, name: line.name.trim(), qty: Number(line.qty), unit_price: Number(line.unit_price),
+          line_total: lineTotal(line), description: line.description, remember: Boolean(line.picked && line.remember && line.item_id),
+        })),
       });
       if (result?.error || !result?.id) throw new Error("save");
       if (mounted.current) router.push(`/invoices/${result.id}`);
@@ -318,6 +336,7 @@ export default function ScanFlow({ items = [] }) {
             <fieldset disabled={saving} className={styles.reviewFields}>
               <div className={styles.reviewTitle}><div><span className={styles.eyebrow}>02 / THE RECORD</span><h2 ref={reviewHeading} tabIndex={-1}>Ek baar dekh lijiye.</h2></div><span className="stamp stamp--pending">Review</span></div>
               <p className={styles.note}>{many && `Lines from all ${slips.length} slips are on this one bill. `}Check the matches, especially the amber marks. Every field is yours to correct.</p>
+              {warnings.length > 0 && <ul className={styles.slipWarnings} aria-label="Notes about the whole slip">{warnings.map((warning, at) => <li key={at} className={warning.level === "check" ? styles.issueCheck : ""}>{warning.slip && `Slip ${warning.slip}: `}{warning.message}</li>)}</ul>}
               <div className={styles.customerFields}>
                 <label className="field">Customer name *<input required autoComplete="name" value={customer.name} onChange={(event) => setCustomer({ ...customer, name: event.target.value })} placeholder="Who is this bill for?" /></label>
                 <label className="field">Phone<input type="tel" autoComplete="tel" value={customer.phone} onChange={(event) => setCustomer({ ...customer, phone: event.target.value })} placeholder="e.g. 98765 43210" /></label>
@@ -330,25 +349,40 @@ export default function ScanFlow({ items = [] }) {
                   <tbody>{lines.map((line, index) => {
                     const item = itemsById.get(String(line.item_id));
                     const overStock = item && quantities.get(String(item.id)) > Number(item.stock_qty);
-                    return <tr key={line.key} className={line.confidence < 0.6 ? styles.checkLine : ""}>
-                      <td><label className={styles.srOnly} htmlFor={`${id}-raw-${line.key}`}>Raw slip text for line {index + 1}</label><textarea id={`${id}-raw-${line.key}`} className={styles.rawLine} rows={2} value={line.raw} onChange={(event) => updateLine(line.key, { raw: event.target.value })} placeholder="Handwritten line…" /></td>
-                      <td><label className={styles.srOnly} htmlFor={`${id}-item-${line.key}`}>Inventory item for line {index + 1}</label><select id={`${id}-item-${line.key}`} className={styles.itemSelect} value={line.item_id ?? ""} onChange={(event) => selectItem(line, event.target.value)}><option value="">Unmatched / custom item</option>{grouped.map(([category, group]) => <optgroup label={category} key={category}>{group.map((entry) => <option value={entry.id} key={entry.id}>{entry.sku} · {entry.name}</option>)}</optgroup>)}</select>
+                    const flagged = line.needs_review && !line.reviewed;
+                    const cells = line.cells && [line.cells.sno && `#${line.cells.sno}`, `qty “${line.cells.qty || "—"}”`, `rate “${line.cells.rate || "—"}”`, `amount “${line.cells.amount || "—"}”`].filter(Boolean).join(" · ");
+                    const computed = (Number(line.qty) || 0) * (Number(line.unit_price) || 0);
+                    const offAmount = line.amount != null && line.qty !== "" && line.unit_price !== "" && !near(computed, line.amount);
+                    return <Fragment key={line.key}>
+                    <tr className={flagged || line.confidence < 0.6 ? styles.checkLine : ""}>
+                      <td><label className={styles.srOnly} htmlFor={`${id}-raw-${line.key}`}>Raw slip text for line {index + 1}</label><textarea id={`${id}-raw-${line.key}`} className={styles.rawLine} rows={2} value={line.raw} onChange={(event) => updateLine(line.key, { raw: event.target.value })} placeholder="Handwritten line…" />
+                        {cells && <span className={styles.slipCells}>Read as {cells}</span>}
+                      </td>
+                      <td><label className={styles.srOnly} htmlFor={`${id}-item-${line.key}`}>Inventory item for line {index + 1}</label><select id={`${id}-item-${line.key}`} className={styles.itemSelect} value={line.item_id ?? ""} onChange={(event) => selectItem(line, event.target.value)}><option value="">Unmatched / custom item</option>{line.candidates?.length > 0 && <optgroup label="Suggested for this line">{line.candidates.map((entry) => <option value={entry.id} key={`s${entry.id}`}>{entry.name} · {entry.unit} · ₹{entry.sell_price}</option>)}</optgroup>}{grouped.map(([category, group]) => <optgroup label={category} key={category}>{group.map((entry) => <option value={entry.id} key={entry.id}>{entry.sku} · {entry.name}</option>)}</optgroup>)}</select>
                         {!item && <input className={styles.customName} aria-label={`Custom item name for line ${index + 1}`} required value={line.name} placeholder="Custom item name" onChange={(event) => updateLine(line.key, { name: event.target.value })} />}
-                        <div className={`${styles.confidence} ${line.confidence < 0.6 ? styles.lowConfidence : ""}`}><meter min="0" max="1" low="0.6" optimum="1" value={line.confidence} aria-label={`Match confidence for line ${index + 1}`} /><span>{line.confidence < 0.6 ? "Check match" : "Matched"} · {Math.round(line.confidence * 100)}%</span></div>
+                        <div className={`${styles.confidence} ${line.confidence < 0.6 ? styles.lowConfidence : ""}`}><meter min="0" max="1" low="0.6" optimum="1" value={line.confidence} aria-label={`Match confidence for line ${index + 1}`} /><span>{!item ? "Not matched" : line.picked ? "Chosen by you" : line.confidence < 0.6 ? "Check match" : "Matched"}{item && !line.picked ? ` · ${Math.round(line.confidence * 100)}%` : ""}</span></div>
+                        {item && line.picked && line.description && <label className={styles.remember}><input type="checkbox" checked={line.remember} onChange={(event) => updateLine(line.key, { remember: event.target.checked })} />Remember “{line.description}” as this item</label>}
                         {overStock && <span className={styles.stockWarning}>Only {item.stock_qty} {item.unit} in stock · {quantities.get(String(item.id))} on this bill</span>}
                       </td>
                       <td><input className={styles.numberInput} aria-label={`Quantity for line ${index + 1}`} type="number" min="1" step="1" required value={line.qty} onChange={(event) => updateLine(line.key, { qty: event.target.value })} /></td>
-                      <td><input className={styles.rateInput} aria-label={`Rate for line ${index + 1}`} type="number" min="0" step="0.01" required value={line.unit_price} onChange={(event) => updateLine(line.key, { unit_price: event.target.value })} /></td>
-                      <td className={`num ${styles.amount}`}>{money.format((Number(line.qty) || 0) * (Number(line.unit_price) || 0))}</td>
+                      <td><input className={styles.rateInput} aria-label={`Rate for line ${index + 1}`} type="number" min="0" step="0.01" required value={line.unit_price} placeholder={item ? `list ${item.sell_price}` : ""} onChange={(event) => updateLine(line.key, { unit_price: event.target.value })} /></td>
+                      <td className={`num ${styles.amount}`}>{money.format(lineTotal(line))}{offAmount && <span className={styles.slipAmount}>Slip says {money.format(line.amount)}</span>}</td>
                       <td><button className={styles.remove} type="button" aria-label={`Remove line ${index + 1}`} onClick={() => setLines((current) => current.filter((entry) => entry.key !== line.key))}>×</button></td>
-                    </tr>;
+                    </tr>
+                    {(line.issues?.length > 0 || line.needs_review) && <tr className={`${styles.issueRow} ${flagged ? styles.checkLine : ""}`}>
+                      <td colSpan={6}>
+                        <ul className={styles.issues} aria-label={`Notes for line ${index + 1}`}>{line.issues.map((issue, at) => <li key={at} className={issue.level === "check" ? styles.issueCheck : ""}>{issue.message}</li>)}</ul>
+                        {line.needs_review && <label className={styles.reviewed}><input type="checkbox" checked={line.reviewed} onChange={(event) => updateLine(line.key, { reviewed: event.target.checked })} />Checked against the photo</label>}
+                      </td>
+                    </tr>}
+                    </Fragment>;
                   })}</tbody>
                 </table>
                 {!lines.length && <p className={styles.emptyLines}>No lines yet. Add an item to begin the entry.</p>}
               </div>
-              <button type="button" className={`btn btn--ghost ${styles.addLine}`} onClick={() => setLines((current) => [...current, { key: nextLine.current++, raw: "", item_id: null, name: "", qty: 1, unit_price: "", confidence: 0 }])}>+ Add a line</button>
+              <button type="button" className={`btn btn--ghost ${styles.addLine}`} onClick={() => setLines((current) => [...current, { key: nextLine.current++, raw: "", item_id: null, name: "", qty: 1, unit_price: "", amount: null, confidence: 0, description: "", cells: null, candidates: [], issues: [], needs_review: false, reviewed: false, picked: false, remember: false }])}>+ Add a line</button>
               <div className={styles.total}><span>Bill total</span><strong>{money.format(total)}</strong></div>
-              <div className={styles.saveRow}><p>Saving deducts stock and adds this bill to the customer’s khata.</p><button className="btn btn--red" type="submit" disabled={saving || !lines.length}>{saving ? "Writing in the khata…" : "Save invoice →"}</button></div>
+              <div className={styles.saveRow}><p>Saving deducts stock and adds this bill to the customer’s khata.</p><div className={styles.saveActions}>{unchecked > 0 && <span className={styles.issueCheck}>{unchecked} {unchecked === 1 ? "line" : "lines"} to check</span>}<button className="btn btn--red" type="submit" disabled={saving || !lines.length}>{saving ? "Writing in the khata…" : "Save invoice →"}</button></div></div>
             </fieldset>
           </form>
         )}

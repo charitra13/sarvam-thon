@@ -1,0 +1,175 @@
+// Candidate retrieval and the full matchSlip pipeline with the model replaced by a scripted stand-in.
+// tests/fixtures/catalog.json is the full 3,950-item shop catalog (ids, names, units, list prices; no cost or stock).
+import { describe, expect, test } from "bun:test";
+import { aliasKey, aliasLearnable, buildIndex, findCandidates, lookalikes } from "../lib/catalog.js";
+import { matchSlip } from "../lib/sarvam.js";
+import rows from "./fixtures/catalog.json";
+import slips from "./fixtures/slips.json";
+
+const items = rows.map(([id, sku, name, category, unit, sell_price]) => ({ id, sku, name, category, unit, sell_price }));
+const index = buildIndex(items);
+const ids = (description) => findCandidates(index, description).candidates.map((c) => c.item.id);
+
+// Reads the prompt the pipeline sends and answers with `choose(line)`; records every call.
+function scriptedModel(choose) {
+  const calls = [];
+  const complete = async (messages, maxTokens) => {
+    const prompt = messages.at(-1).content;
+    calls.push({ messages, maxTokens });
+    const lines = prompt.split(/\n\n(?=Line \d+:)/).map((block) => {
+      const [head, ...options] = block.split("\n");
+      return {
+        line: Number(head.match(/^Line (\d+):/)[1]),
+        description: head.match(/“(.*?)”/)[1],
+        options: options.map((o) => ({ key: o.trim().split(" ")[0], name: o.trim().replace(/^c\d+ /, "").split(" | ")[0] })),
+      };
+    });
+    return JSON.stringify({ lines: lines.map((l) => ({ line: l.line, ...choose(l) })) });
+  };
+  return { complete, calls };
+}
+const pickName = (map) => (line) => {
+  const want = map[line.description];
+  const option = line.options.find((o) => o.name === want);
+  return { pick: option?.key ?? null, confidence: 0.95 };
+};
+
+describe("candidate retrieval", () => {
+  test("exact English names find their item first", () => {
+    expect(ids("Doms Fusion Pencil")[0]).toBe(1750);
+    expect(ids("DOMS INXTRA BALLPEN")[0]).toBe(2662);
+  });
+
+  test("Hindi and transliterated names find the same items", () => {
+    expect(ids("पेन डोम्स इनक्स्ट्रा")).toEqual(expect.arrayContaining([2662, 3999, 2663]));
+    expect(ids("कॉपी शिवालाल 25/-")[0]).toBe(2050);
+    expect(ids("डोम्स ट्रायंगल रबर")).toEqual(expect.arrayContaining([1438, 1439]));
+    expect(ids("नटराज पेंसिल")).toContain(1896);
+  });
+
+  test("pack variants are never hidden behind each other", () => {
+    expect(ids("Elkos Signy Pen")).toEqual(expect.arrayContaining([2766, 3997]));
+    expect(ids("Doms Triangle Eraser")).toEqual(expect.arrayContaining([1438, 1439]));
+  });
+
+  test("lists stay bounded", () => {
+    for (const d of ["pen", "Shivalal copy", "Doms", "नटराज"]) expect(ids(d).length).toBeLessThanOrEqual(12);
+  });
+
+  test("unresolvable shorthand is marked weak instead of forced", () => {
+    expect(findCandidates(index, "जिस पत्ती फोर्ट 20").weak).toBe(true);
+    expect(findCandidates(index, "PFKKO").weak).toBe(true);
+    expect(findCandidates(index, "—").candidates).toEqual([]);
+  });
+
+  test("lookalikes: same name, pcs vs pkt, and number-only descriptions", () => {
+    expect(lookalikes(index, 2766, ids("Elkos Signy Pen"), "Elkos Signy Pen")).toContain(3997);
+    expect(lookalikes(index, 3999, ids("पेन डोम्स इनक्स्ट्रा"), "पेन डोम्स इनक्स्ट्रा")).toContain(2662);
+    expect(lookalikes(index, 1896, ids("Natraj 621"), "Natraj 621")).toEqual(expect.arrayContaining([1898, 1454]));
+    // The slip's "25/-" tells the 25/- copy apart from the 12/- copy.
+    expect(lookalikes(index, 2050, ids("कॉपी शिवालाल 25/-"), "कॉपी शिवालाल 25/-")).not.toContain(2048);
+    expect(lookalikes(index, 1750, ids("Doms Fusion Pencil"), "Doms Fusion Pencil")).toEqual([]);
+  });
+
+  test("aliases: only specific names are learnable, and a confirmed one leads the list", () => {
+    expect(aliasLearnable(aliasKey("पेन"))).toBe(false);
+    expect(aliasLearnable(aliasKey("pen 20"))).toBe(false);
+    expect(aliasLearnable(aliasKey("पोसम डोम ब्लन"))).toBe(true);
+    const learned = buildIndex(items, [{ alias: aliasKey("पोसम डोम ब्लन"), item_id: 1750 }]);
+    expect(findCandidates(learned, "पोसम डोम ब्लन")).toMatchObject({ alias: 1750 });
+    expect(findCandidates(learned, "पोसम डोम ब्लन").candidates[0].item.id).toBe(1750);
+  });
+});
+
+describe("matchSlip pipeline", () => {
+  const controlled = {
+    "Doms Fusion Pencil": "DOMS FUSION PENCIL 12%",
+    "DOMS INXTRA BALLPEN": "DOMS INXTRA BALLPEN",
+    "पेन डोम्स इनक्स्ट्रा": "DOMS INXTRA BALLPEN",
+    "कॉपी शिवालाल 25/-": "SHIVALAL COPY  25/-",
+  };
+
+  test("the model only picks SKUs; every figure stays as read from the slip", async () => {
+    const model = scriptedModel(pickName(controlled));
+    const result = await matchSlip(slips.controlled, items, { complete: model.complete });
+    const [pencil, ballpen, hindi, copy] = result.items;
+    expect(pencil).toMatchObject({ item_id: 1750, qty: 200, unit_price: 4.1, line_total: 820 });
+    expect(ballpen).toMatchObject({ item_id: 2662, qty: 100, unit_price: 3.8 });
+    expect(copy).toMatchObject({ item_id: 2050, qty: 200, unit_price: 15.6, description: "कॉपी शिवालाल 25/-" });
+    expect(hindi.item_id).toBe(2662);
+    expect(hindi.ambiguous_with).toContain(3999);
+    expect(hindi.needs_review).toBe(true);
+    expect(hindi.confidence).toBeLessThanOrEqual(0.5);
+    expect(model.calls).toHaveLength(1);
+  });
+
+  test("prompts are bounded to each line's shortlist, never the whole catalog", async () => {
+    const model = scriptedModel(() => ({ pick: null }));
+    await matchSlip(slips["ankur-hi"], items, { complete: model.complete });
+    const prompt = model.calls.map((c) => c.messages.map((m) => m.content).join("\n")).join("\n");
+    expect(model.calls).toHaveLength(1);
+    expect(prompt.length).toBeLessThan(18 * 12 * 120 + 3000);
+    expect((prompt.match(/^ {2}c\d+ /gm) ?? []).length).toBeLessThanOrEqual(18 * 12);
+    expect(model.calls[0].maxTokens).toBeLessThanOrEqual(60 + 18 * 40);
+  });
+
+  test("more than 18 lines are split into bounded calls", async () => {
+    const text = Array.from({ length: 20 }, (_, i) => `${i + 1} 10 Doms Fusion Pencil 4/10 41`).join("\n");
+    const model = scriptedModel(() => ({ pick: null }));
+    const result = await matchSlip(text, items, { complete: model.complete });
+    expect(result.items).toHaveLength(20);
+    expect(model.calls).toHaveLength(2);
+  });
+
+  test("a pick outside the line's shortlist, or a raw catalog id, is ignored", async () => {
+    const model = scriptedModel((line) => ({ pick: line.line === 1 ? "c99" : "1750", confidence: 1 }));
+    const result = await matchSlip(slips.controlled, items, { complete: model.complete });
+    for (const line of result.items) expect(line.item_id).toBeNull();
+    expect(result.items[0].needs_review).toBe(true);
+    expect(result.items[0].issues.some((i) => i.message.includes("outside this line's shortlist"))).toBe(true);
+  });
+
+  test("numbers in the model reply cannot change the figures", async () => {
+    const complete = async () => JSON.stringify({ lines: [{ line: 1, pick: "c1", qty: 2, rate: 2140, amount: 0 }] });
+    const result = await matchSlip(slips["ankur-hi"], items, { complete });
+    expect(result.items[0]).toMatchObject({ qty: 100, unit_price: 4.1, amount: 410 });
+  });
+
+  test("the captured Sanjeev reply (old format) still yields 5 rows at 3.20, flagged", async () => {
+    const complete = async () => slips["sanjeev-captured-model-reply"];
+    const result = await matchSlip(slips["sanjeev-hi"], items, { complete });
+    expect(result.items).toHaveLength(5);
+    expect(result.items[0]).toMatchObject({ qty: 100, unit_price: 3.2, amount: 320, item_id: null, needs_review: true });
+    expect(result.items[2].needs_review).toBe(false);
+    expect(result.items.map((l) => l.raw)).toEqual(slips["sanjeev-hi"].split("\n").slice(2, 7));
+  });
+
+  test("duplicate pack variants picked by the model are flagged, not trusted", async () => {
+    const model = scriptedModel((line) => ({ pick: line.options.find((o) => o.name === "Elkos Signy Pen")?.key, confidence: 0.99 }));
+    const result = await matchSlip("1 10 Elkos Signy Pen 5 50", items, { complete: model.complete });
+    expect(result.items[0].ambiguous_with.length).toBe(1);
+    expect(result.items[0].needs_review).toBe(true);
+  });
+
+  test("a shop-confirmed alias matches without asking the model", async () => {
+    const model = scriptedModel(() => ({ pick: null }));
+    const aliases = [{ alias: aliasKey("पेन डोम्स इनक्स्ट्रा"), item_id: 2662 }];
+    const result = await matchSlip("1 100 पेन डोम्स इनक्स्ट्रा 3/80 380", items, { aliases, complete: model.complete });
+    expect(result.items[0]).toMatchObject({ item_id: 2662, needs_review: false });
+    expect(model.calls).toHaveLength(0);
+  });
+
+  test("an unrecognised layout falls back to model rows that all need review", async () => {
+    const complete = async (messages) => messages[0].content.includes("printed Hindi bill book")
+      ? JSON.stringify({ customer_name: "Ravi", items: [{ sno: 1, qty: "12", description: "Doms Fusion Pencil", rate: "4/10", amount: "49-20" }] })
+      : JSON.stringify({ lines: [] });
+    const result = await matchSlip("Ravi traders\nDoms Fusion Pencil twelve at four ten", items, { complete });
+    expect(result.customer_name).toBe("Ravi");
+    expect(result.items[0]).toMatchObject({ qty: 12, unit_price: 4.1, line_total: 49.2, needs_review: true });
+  });
+
+  test("a model failure is passed up so the page can offer a retry", async () => {
+    const complete = async () => { throw new Error("timeout"); };
+    expect(matchSlip(slips.controlled, items, { complete })).rejects.toThrow("timeout");
+  });
+});

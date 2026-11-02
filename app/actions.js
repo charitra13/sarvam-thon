@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import * as data from "../lib/data.js";
 import { readSlip, matchSlip, callScript, speak } from "../lib/sarvam.js";
+import { aliasKey, aliasLearnable } from "../lib/catalog.js";
 
 // Logs the real error server-side and hands the UI a friendly message.
 async function attempt(message, fn) {
@@ -31,22 +32,34 @@ export async function readSlipAction(formData) {
 export async function matchSlipAction(text) {
   if (typeof text !== "string" || !text.trim()) return { error: "There is no slip text to match." };
   return attempt("Sarvam-105B could not match the items. Please try again.", async () =>
-    matchSlip(text.slice(0, 8000), await data.listItems()));
+    matchSlip(text.slice(0, 8000), await data.listItems(), { aliases: await data.listAliases() }));
 }
 
 export async function saveInvoiceAction(payload) {
   const name = String(payload?.customer?.name ?? "").trim();
   if (!name) return { error: "Add the customer name." };
-  const lines = (Array.isArray(payload?.lines) ? payload.lines : [])
-    .map((l) => ({
-      item_id: Number.isInteger(l.item_id) ? l.item_id : null,
-      raw_text: l.raw_text ? String(l.raw_text).slice(0, 500) : null,
-      name: String(l.name ?? "").trim().slice(0, 200),
-      qty: toInt(l.qty),
-      unit_price: toMoney(l.unit_price),
-    }))
+  const raw = Array.isArray(payload?.lines) ? payload.lines : [];
+  const lines = raw
+    .map((l) => {
+      const line = {
+        item_id: Number.isInteger(l.item_id) ? l.item_id : null,
+        raw_text: l.raw_text ? String(l.raw_text).slice(0, 500) : null,
+        name: String(l.name ?? "").trim().slice(0, 200),
+        qty: toInt(l.qty),
+        unit_price: toMoney(l.unit_price),
+      };
+      // Keep the written slip amount only when it agrees with qty × rate within rounding.
+      const written = toMoney(l.line_total);
+      if (l.line_total != null && Number.isFinite(written) && Math.abs(written - line.qty * line.unit_price) <= 0.5) line.line_total = written;
+      return line;
+    })
     .filter((l) => l.name && l.qty > 0 && l.unit_price >= 0);
   if (!lines.length) return { error: "Add at least one item with a quantity." };
+  // Only lines where the person ticked "remember" after choosing the item themselves teach an alias.
+  const aliases = raw
+    .filter((l) => l.remember === true && Number.isInteger(l.item_id) && typeof l.description === "string")
+    .map((l) => ({ alias: aliasKey(l.description.slice(0, 200)), item_id: l.item_id }))
+    .filter((a) => aliasLearnable(a.alias));
   const date = /^\d{4}-\d{2}-\d{2}$/.test(payload.invoice_date ?? "") ? payload.invoice_date : null;
   return attempt("Could not save the invoice. Please try again.", async () => {
     const id = await data.createInvoice({
@@ -55,6 +68,7 @@ export async function saveInvoiceAction(payload) {
       invoice_date: date,
       ocr_text: payload.ocr_text ? String(payload.ocr_text).slice(0, 10000) : null,
       lines,
+      aliases,
     });
     revalidatePath("/", "layout");
     return { id };

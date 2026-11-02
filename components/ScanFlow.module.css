@@ -97,3 +97,12 @@
 @media (max-width: 720px) { .steps { gap: 12px; margin-bottom: 22px; } .step { flex-direction: column; align-items: flex-start; gap: 9px; font-size: 10px; } .workspace { grid-template-columns: minmax(0, 1fr); gap: 15px; } .capture, .review { padding: 20px; } .waiting { padding: 18px 5px; } .waiting h2 { font-size: 35px; } .waiting .promise { margin-top: 25px; } .customerFields { gap: 15px; } .reviewTitle h2 { font-size: 23px; } .saveRow { flex-direction: column; align-items: stretch; gap: 10px; } .saveRow p { max-width: none; } .saveRow button { justify-content: center; } .reviewWorkspace .capture { grid-template-columns: 120px 1fr; column-gap: 15px; } .reviewWorkspace .photoControls { flex-direction: column; align-items: stretch; } .ocrPanel summary span { display: block; margin: 8px 0 0 16px; } }
 @media (max-width: 400px) { .customerFields { grid-template-columns: 1fr; } .sectionLabel .hand { font-size: 13px; } .capture, .review { padding: 16px; } .total { gap: 14px; } .total strong { font-size: 24px; } }
 @media (prefers-reduced-motion: reduce) { .workingRule span { animation: none; width: 100%; opacity: .6; } .photo, .active .tick { transform: none; } }
+.slipCells { display: block; max-width: 150px; margin-top: 6px; color: var(--ink-soft, #5b5246); font: 10px/1.5 var(--font-mono, monospace); overflow-wrap: anywhere; }
+.slipAmount { display: block; margin-top: 4px; color: #88520a; font-size: 10px; }
+.remember { display: flex; gap: 6px; align-items: flex-start; max-width: 285px; margin-top: 8px; font-size: 10px; line-height: 1.5; }
+.issueRow td { padding-top: 0 !important; }
+.issues, .slipWarnings { margin: 0; padding-left: 18px; font-size: 11px; line-height: 1.6; color: var(--ink-soft, #5b5246); }
+.slipWarnings { margin: 0 0 18px; }
+.issueCheck { color: #88520a; }
+.reviewed { display: inline-flex; gap: 7px; align-items: center; margin-top: 8px; font-size: 12px; font-weight: 600; }
+.saveActions { display: flex; gap: 14px; align-items: center; font-size: 12px; }

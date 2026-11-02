@@ -1,5 +1,15 @@
 # Version history
 
+## 0.6.0-alpha.1 — unfinished checkpoint
+
+- Draft separate slip-row parsing and bounded catalog candidate matching, with Hindi spelling
+  normalization, arithmetic warnings, and review controls. Add 37 deterministic regression tests.
+- Draft explicit alias learning behind an optional, unapplied database migration. No production
+  schema migration has been applied.
+- Not release-ready: fallback extraction still needs numeric grounding; server-side invoice
+  validation and review acknowledgements need tightening. Alias availability and inferred rate
+  corrections also need review. Independent final code review remains pending.
+
 ## 0.5.1
 
 - Replace Neon's demo inventory with the final CSV catalog: 3,950 items across 12 categories,
