@@ -1,5 +1,11 @@
 # Version history
 
+## 0.5.0
+
+- Scan several slips at once for one customer: choose or drop multiple photos, or add camera shots one
+  by one. Each slip is read and matched in turn, and all lines merge into one invoice for review.
+  A failed slip can be retried without re-reading the others.
+
 ## 0.4.0
 
 - Switch the whole UI to Helvetica Neue (Helvetica/Arial fallback) and drop the four Google fonts. Colors
