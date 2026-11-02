@@ -1,9 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { SESSION_COOKIE, SESSION_VALUE } from "../lib/auth.js";
 import * as data from "../lib/data.js";
 import { readSlip, matchSlip, callScript, speak } from "../lib/sarvam.js";
 
@@ -19,21 +16,6 @@ async function attempt(message, fn) {
 
 const toInt = (v) => Number.parseInt(v, 10);
 const toMoney = (v) => Math.round(Number(v) * 100) / 100;
-
-export async function loginAction(_prev, formData) {
-  if (formData.get("username") !== "admin" || formData.get("password") !== "admin") {
-    return { error: "Wrong username or password. The demo login is admin / admin." };
-  }
-  (await cookies()).set(SESSION_COOKIE, SESSION_VALUE, {
-    httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 7,
-  });
-  redirect("/");
-}
-
-export async function logoutAction() {
-  (await cookies()).delete(SESSION_COOKIE);
-  redirect("/login");
-}
 
 export async function readSlipAction(formData) {
   const file = formData.get("file");

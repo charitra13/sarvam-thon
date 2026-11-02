@@ -1,5 +1,10 @@
 # Version history
 
+## 0.3.0
+
+- Open the hackathon demo directly on the dashboard without login, remove sign-out and session
+  checks, and redirect old login links to the dashboard.
+
 ## 0.2.1
 
 - Fix slip reading: teach the matcher the bill-book columns (S.No, quantity, description, rate, amount),

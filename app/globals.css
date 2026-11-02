@@ -132,17 +132,6 @@ h3 { font-size: 1.05rem; }
 .nav a.nav__cta { margin-top: 10px; border: 1px solid rgba(241, 213, 138, .5); color: var(--gold-hi); }
 .nav a.nav__cta[aria-current="page"] { color: var(--red-deep); }
 .binding__foot { position: relative; margin-top: auto; display: grid; gap: 10px; padding: 0 10px; font-size: .78rem; color: rgba(246, 226, 164, .6); }
-.binding__foot button {
-  justify-self: start;
-  background: none;
-  border: 0;
-  padding: 0;
-  color: rgba(246, 226, 164, .85);
-  font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
 
 /* ---------- Page heading ---------- */
 .page-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; margin-bottom: 28px; }

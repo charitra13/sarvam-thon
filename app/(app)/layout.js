@@ -1,6 +1,5 @@
 import Link from "next/link";
 import Nav from "../../components/Nav.js";
-import { logoutAction } from "../actions.js";
 
 export default function AppLayout({ children }) {
   return (
@@ -14,9 +13,6 @@ export default function AppLayout({ children }) {
         <Nav />
         <div className="binding__foot">
           <span>Track Desk Stationery · Powered by Sarvam AI</span>
-          <form action={logoutAction}>
-            <button type="submit">Sign out</button>
-          </form>
         </div>
       </aside>
       <main className="main">{children}</main>

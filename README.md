@@ -10,7 +10,7 @@ inventory and a customer ledger, and makes Hinglish voice calls for dispatch and
 - Saving an invoice lowers stock and adds a debit to the customer's ledger
 - Customer ledger (khata) with payments and a running balance
 - Dispatch and payment calls voiced by Bulbul v4 (`simran_enhi_customer`), played in the browser
-- Demo login: `admin` / `admin`
+- Opens directly to the dashboard with no login for the hackathon demo
 
 ## Setup
 
