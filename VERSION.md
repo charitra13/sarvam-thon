@@ -1,5 +1,12 @@
 # Version history
 
+## 0.5.1
+
+- Replace Neon's demo inventory with the final CSV catalog: 3,950 items across 12 categories,
+  mapped to the existing item schema by SKU. Use `unit_size` as the unit, defaulting to `pc`.
+- Preserve invoice details and ledger balances; clear six demo invoice item links whose reused
+  SKUs now identify different products. CSV fields absent from the current schema are not imported.
+
 ## 0.5.0
 
 - Scan several slips at once for one customer: choose or drop multiple photos, or add camera shots one
