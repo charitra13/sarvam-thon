@@ -1,0 +1,12 @@
+{
+  "name": "sarvam-thon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run first-call.js"
+  },
+  "dependencies": {
+    "sarvamai": "^1.1.14"
+  }
+}
