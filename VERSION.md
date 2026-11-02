@@ -11,6 +11,8 @@
 - Add deterministic regression coverage for captured Ankur Hindi/default-English and Sanjeev
   OCR, candidate matching, invoice validation and persistence. Other test photos and real-photo
   product identities still require manual validation.
+- Validate invoice rounding, stock and ledger consistency, alias migration idempotency, and
+  transaction rollback on foreign-key failures against disposable local PostgreSQL.
 
 ## 0.6.0-alpha.1 — unfinished checkpoint
 
