@@ -1,7 +1,7 @@
 // Candidate retrieval and the full matchSlip pipeline with the model replaced by a scripted stand-in.
 // tests/fixtures/catalog.json is the full 3,950-item shop catalog (ids, names, units, list prices; no cost or stock).
 import { describe, expect, test } from "bun:test";
-import { aliasKey, aliasLearnable, buildIndex, findCandidates, lookalikes } from "../lib/catalog.js";
+import { aliasKey, aliasLearnable, buildIndex, candidateConflict, contextualDescription, findCandidates, lookalikes } from "../lib/catalog.js";
 import { matchSlip } from "../lib/sarvam.js";
 import rows from "./fixtures/catalog.json";
 import slips from "./fixtures/slips.json";
@@ -262,6 +262,42 @@ describe("matchSlip pipeline", () => {
     await matchSlip("1 10 Doms gel pen blue 5 50\n2 5 - red 5 25\n3 6 - black 5 30", items, { complete: model.complete });
     const prompt = model.calls.map((c) => c.messages.at(-1).content).join("\n");
     expect(prompt).toContain("“black” (continues the line above: “Doms gel pen blue”)");
+  });
+
+  test("partially recognised slips retain unnumbered products in source order for review", async () => {
+    const source = "100 Elkos Signy Pen 5 500\n1 10 Doms Fusion Pencil 4/10 41\n200 Elkos Signy Pen 5 1000";
+    const model = scriptedModel(() => ({ pick: null }));
+    const result = await matchSlip(source, items, { complete: model.complete });
+    expect(result.items.map((line) => line.raw)).toEqual(source.split("\n"));
+    expect(result.items.map((line) => line.qty)).toEqual([100, 10, 200]);
+    expect(result.items[0].needs_review).toBe(true);
+    expect(result.items[2].needs_review).toBe(true);
+  });
+
+  test("remembered continuation aliases are scoped to their resolved parent product", async () => {
+    const description = "blue 0.7";
+    const context = "Doms Inxon Pen";
+    const aliases = [
+      { alias: aliasKey(description), item_id: 2658 }, // historical fragment must not match a continuation
+      { alias: aliasKey(description, context), item_id: 2658 },
+    ];
+    const model = scriptedModel(() => ({ pick: null }));
+    const known = await matchSlip(`1 10 ${context} 5 50\n2 10 - ${description} 5 50`, items, { aliases, complete: model.complete });
+    expect(known.items[1]).toMatchObject({ item_id: 2658, needs_review: false, context, continued: true });
+    const different = await matchSlip(`1 10 Doms Inxo Classic Pen 5 50\n2 10 - ${description} 5 50`, items, { aliases, complete: model.complete });
+    expect(different.items[1]).toMatchObject({ item_id: null, needs_review: true });
+    expect(different.items[1].issues.some((issue) => issue.message.includes("shop confirmed"))).toBe(false);
+  });
+
+  test("a continuation printed price replaces the preceding item's price", async () => {
+    const description = contextualDescription("25/-", "Copy Shivalal 12/-");
+    expect(description).toBe("Copy Shivalal 25/-");
+    expect(candidateConflict(description, items.find((item) => item.id === 2050))).toBeNull();
+    expect(contextualDescription("mrp 25", "Copy Shivalal mrp 12")).toBe("Copy Shivalal mrp 25");
+    const model = scriptedModel(pickName({ "25/-": "SHIVALAL COPY  25/-" }));
+    const result = await matchSlip("1 10 Copy Shivalal 12/- 5 50\n2 200 - 25/- 15/60 3120", items, { complete: model.complete });
+    expect(result.items[1]).toMatchObject({ item_id: 2050, unit_price: 15.6, amount: 3120 });
+    expect(result.items[1].issues.some((issue) => issue.message.includes("printed price"))).toBe(false);
   });
 
   test("a model failure is passed up so the page can offer a retry", async () => {

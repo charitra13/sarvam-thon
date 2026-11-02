@@ -1,13 +1,19 @@
 import { describe, expect, test, mock } from "bun:test";
-import { editInvoiceLine, invoiceLineTotal, lineReview, toInvoiceLine, validateInvoice } from "../lib/invoice.js";
+import { editInvoiceLine, invoiceLineTotal, invoiceWarningsKey, lineReview, lineReviewed, toInvoiceLine, validateInvoice } from "../lib/invoice.js";
+import { aliasKey } from "../lib/catalog.js";
 
 const manual = (patch = {}) => ({ source: "manual", item_id: null, name: "Custom pencil", qty: "10", unit_price: "3.20", ...patch });
 const payload = (lines) => ({ customer: { name: "Test shop" }, lines });
-const scanned = (patch = {}) => ({
-  source: "ocr", raw: "1 10 Doms Fusion Pencil 3/20 32", original_raw: "1 10 Doms Fusion Pencil 3/20 32",
-  item_id: 1750, name: "DOMS FUSION PENCIL 12%", description: "Doms Fusion Pencil",
-  qty: 10, unit_price: 3.2, amount: 32, needs_review: false, reviewed: false, ...patch,
-});
+const confirm = (line) => editInvoiceLine(line, { reviewed: true });
+const confirmWarnings = (value) => ({ ...value, warnings_reviewed: true, warnings_review_key: invoiceWarningsKey(value) });
+const scanned = (patch = {}) => {
+  const line = {
+    source: "ocr", raw: "1 10 Doms Fusion Pencil 3/20 32", original_raw: "1 10 Doms Fusion Pencil 3/20 32",
+    item_id: 1750, name: "DOMS FUSION PENCIL 12%", description: "Doms Fusion Pencil",
+    qty: 10, unit_price: 3.2, amount: 32, needs_review: false, reviewed: false, ...patch,
+  };
+  return line.reviewed ? confirm(line) : line;
+};
 
 describe("invoice review and validation", () => {
   test("rejects every invalid line instead of saving a filtered invoice", () => {
@@ -32,7 +38,7 @@ describe("invoice review and validation", () => {
   test("the server requires acknowledgement of OCR numeric and matching issues", () => {
     const flagged = scanned({ needs_review: true });
     expect(validateInvoice(payload([toInvoiceLine(flagged)])).error).toBeTruthy();
-    expect(validateInvoice(payload([toInvoiceLine({ ...flagged, reviewed: true })])).error).toBeUndefined();
+    expect(validateInvoice(payload([toInvoiceLine(confirm(flagged))])).error).toBeUndefined();
     const missingRate = scanned({ original_raw: "| 1 | 10 | Doms Fusion Pencil | | 32 |", needs_review: false });
     expect(validateInvoice(payload([toInvoiceLine(missingRate)])).error).toBeTruthy();
     expect(validateInvoice(payload([toInvoiceLine(scanned({ item_id: null }))])).error).toBeTruthy();
@@ -45,7 +51,7 @@ describe("invoice review and validation", () => {
     expect(lineReview(changed).required).toBe(true);
     expect(lineReview(changed).messages.join(" ")).toContain("32");
     expect(validateInvoice(payload([toInvoiceLine(changed)])).error).toBeTruthy();
-    const confirmed = { ...changed, reviewed: true };
+    const confirmed = confirm(changed);
     const valid = validateInvoice(payload([toInvoiceLine(confirmed)]));
     expect(valid.error).toBeUndefined();
     expect(valid.invoice.lines[0].line_total).toBe(64);
@@ -61,7 +67,7 @@ describe("invoice review and validation", () => {
   });
 
   test("UI, server and saved totals keep a tolerated written rounding residual", () => {
-    const row = scanned({ original_raw: "1 3 Register 333/33 1000", qty: 3, unit_price: 333.33, amount: 1000 });
+    const row = scanned({ original_raw: "1 3 Register 333/33 1000", raw: "1 3 Register 333/33 1000", description: "Register", qty: 3, unit_price: 333.33, amount: 1000 });
     expect(invoiceLineTotal(row)).toBe(1000);
     const saved = validateInvoice(payload([toInvoiceLine(row)]));
     expect(saved.error).toBeUndefined();
@@ -73,7 +79,7 @@ describe("invoice review and validation", () => {
     const changed = editInvoiceLine(scanned({ reviewed: true }), { amount: "32.01" });
     expect(changed.reviewed).toBe(false);
     expect(validateInvoice(payload([toInvoiceLine(changed)])).error).toBeTruthy();
-    const saved = validateInvoice(payload([toInvoiceLine({ ...changed, reviewed: true })]));
+    const saved = validateInvoice(payload([toInvoiceLine(confirm(changed))]));
     expect(saved.invoice.lines[0].line_total).toBe(32.01);
     const free = manual({ qty: 3, unit_price: 0, amount: 0 });
     expect(invoiceLineTotal(free)).toBe(0);
@@ -90,12 +96,49 @@ describe("invoice review and validation", () => {
 
   test("original OCR survives an edited transcription and whole-slip warnings need review", () => {
     const row = editInvoiceLine(scanned(), { raw: "Corrected handwriting" });
-    const result = validateInvoice(payload([toInvoiceLine({ ...row, reviewed: true })]));
+    const result = validateInvoice(payload([toInvoiceLine(confirm(row))]));
     expect(result.invoice.lines[0].raw_text).toContain(row.original_raw);
     expect(result.invoice.lines[0].raw_text).toContain(row.raw);
     const warningPayload = { ...payload([manual()]), warnings: [{ level: "check", message: "Total mismatch" }] };
     expect(validateInvoice(warningPayload).error).toBeTruthy();
-    expect(validateInvoice({ ...warningPayload, warnings_reviewed: true }).error).toBeUndefined();
+    expect(validateInvoice(confirmWarnings(warningPayload)).error).toBeUndefined();
+  });
+
+  test("the server detects changed source values even when edit metadata is absent", () => {
+    const original = scanned();
+    const changed = { ...toInvoiceLine(original), qty: 20, amount: 64, line_total: 64, edited: false, needs_review: false };
+    expect(validateInvoice(payload([changed])).error).toBeTruthy();
+    expect(validateInvoice(payload([toInvoiceLine(confirm(changed))])).error).toBeUndefined();
+    const reviewed = toInvoiceLine(confirm(original));
+    const stale = { ...reviewed, qty: 20, amount: 64, line_total: 64 };
+    expect(lineReviewed(stale)).toBe(false);
+    expect(validateInvoice(payload([stale])).error).toBeTruthy();
+    expect(validateInvoice(payload([{ ...reviewed, item_id: 2658 }])).error).toBeTruthy();
+    expect(validateInvoice(payload([{ ...reviewed, name: "A different product" }])).error).toBeTruthy();
+    expect(lineReviewed({ ...reviewed, qty: "10", unit_price: "3.20", amount: "32.00" })).toBe(true);
+  });
+
+  test("whole-slip checks come from OCR even when the client omits warnings", () => {
+    const value = { ...payload([toInvoiceLine(scanned())]), ocr_text: "1 10 Doms Fusion Pencil 3/20 32\nTotal 33" };
+    expect(validateInvoice(value).error).toContain("whole-slip");
+    expect(validateInvoice({ ...value, warnings: [], warnings_reviewed: true }).error).toContain("whole-slip");
+    const checked = confirmWarnings(value);
+    expect(validateInvoice(checked).error).toBeUndefined();
+    expect(validateInvoice({ ...checked, lines: [toInvoiceLine(scanned()), manual()] }).error).toContain("whole-slip");
+    const twoPages = { ...payload([toInvoiceLine(scanned()), toInvoiceLine(scanned())]),
+      ocr_text: "— Slip 1 —\n1 10 Doms Fusion Pencil 3/20 32\nTotal 32\n\n— Slip 2 —\n1 10 Doms Fusion Pencil 3/20 32\nTotal 32" };
+    expect(validateInvoice(twoPages).error).toBeUndefined();
+  });
+
+  test("learning a continuation saves the parent identity and rejects a fragment without context", () => {
+    const row = scanned({ raw: "2 10 - blue 0.7 5 50", original_raw: "2 10 - blue 0.7 5 50", description: "blue 0.7",
+      context: "Doms Inxon Pen", item_id: 2658, name: "DOMS INXON PEN BLUE", qty: 10, unit_price: 5, amount: 50,
+      picked: true, reviewed: true, remember: true });
+    const result = validateInvoice(payload([toInvoiceLine(row)]));
+    expect(result.error).toBeUndefined();
+    expect(result.invoice.aliases).toEqual([{ alias: aliasKey("blue 0.7", "Doms Inxon Pen"), item_id: 2658 }]);
+    expect(result.invoice.aliases[0].alias).not.toBe(aliasKey("blue 0.7"));
+    expect(validateInvoice(payload([toInvoiceLine(confirm({ ...row, context: "" }))])).error).toBeTruthy();
   });
 });
 
@@ -131,7 +174,7 @@ test("saveInvoiceAction validates the whole payload before its first database ca
 });
 
 test("saved SQL amounts and the ledger use the same written rounding total as review", async () => {
-  const row = scanned({ original_raw: "1 3 Register 333/33 1000", qty: 3, unit_price: 333.33, amount: 1000 });
+  const row = scanned({ original_raw: "1 3 Register 333/33 1000", raw: "1 3 Register 333/33 1000", description: "Register", qty: 3, unit_price: 333.33, amount: 1000 });
   const before = queries.length;
   expect(await saveInvoiceAction(payload([toInvoiceLine(row)]))).toMatchObject({ id: 123 });
   const recent = queries.slice(before);

@@ -1,5 +1,15 @@
 # Version history
 
+## 1.0.1
+
+- Keep unnumbered product rows in partially parsed slips and retain incomplete rows with rate cells.
+- Scope remembered continuation names to their full product context and replace inherited printed
+  prices when a continuation supplies another price.
+- Derive review requirements from original OCR, bind acknowledgements to checked values, and
+  require review of total discrepancies greater than ₹0.50.
+- Add regression cases for all six correctness review findings; validate 72 tests, the production
+  build, and invoice/alias persistence and rollback on disposable local PostgreSQL.
+
 ## 1.0.0
 
 - Separate slip-row extraction from inventory matching. Keep source text and figures, retrieve

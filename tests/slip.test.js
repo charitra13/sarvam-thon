@@ -172,6 +172,42 @@ describe("rows with missing or odd cells", () => {
     expect(slip.figures.map((f) => f.value)).toEqual([50, 80]);
     expect(slip.notes).toContain("Pay after delivery");
   });
+
+  test("a missing serial number never hides a product before or after a numbered row", () => {
+    const unnumbered = "100 Elkos Signy Pen 5 500";
+    const numbered = "1 10 Doms Fusion Pencil 4/10 41";
+    for (const text of [`${unnumbered}\n${numbered}`, `${numbered}\n${unnumbered}`]) {
+      const slip = read(text);
+      expect(slip.lines).toHaveLength(2);
+      expect(slip.lines.map((line) => line.raw)).toEqual(text.split("\n"));
+      expect(slip.lines.find((line) => line.sno === null)).toMatchObject({
+        qty: 100, description: "Elkos Signy Pen", unit_price: 5, amount: 500, layout: "model",
+      });
+      expect(slip.figures).toHaveLength(0);
+    }
+  });
+
+  test("a rate cell preserves rows with neither quantity nor description", () => {
+    for (const rate of ["5", "0"]) {
+      const slip = read(`| 2 | | | ${rate} | 125 |`);
+      expect(slip.lines).toHaveLength(1);
+      expect(slip.lines[0]).toMatchObject({ qty: null, description: "", rate: Number(rate), amount: 125 });
+      expect(checks(slip.lines[0]).map((issue) => issue.message).join(" ")).toContain("description");
+      expect(checks(slip.lines[0]).map((issue) => issue.message).join(" ")).toContain("Quantity");
+      expect(slip.figures).toHaveLength(0);
+    }
+    expect(read("| 2 | | | | 125 |").figures[0].value).toBe(125);
+  });
+
+  test("total rounding allows at most half a rupee, never a whole rupee", () => {
+    for (const total of [40, 42, 41.51]) {
+      expect(read(`1 10 Pencil 4/10 41\nTotal ${total}`).warnings[0].level).toBe("check");
+    }
+    for (const total of [40.5, 41.5]) {
+      expect(read(`1 10 Pencil 4/10 41\nTotal ${total}`).warnings[0].level).toBe("info");
+    }
+    expect(read("1 10 Pencil 4/10 41\nTotal 41").warnings).toEqual([]);
+  });
 });
 
 test("the captured default en-IN OCR keeps all 18 rows and their obvious quantities", () => {

@@ -4,8 +4,8 @@ import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { readSlipAction, matchSlipAction, saveInvoiceAction } from "../app/actions.js";
 import { amountsAgree } from "../lib/slip.js";
-import { editInvoiceLine, invoiceLineTotal, lineReview, toInvoiceLine, validateInvoice } from "../lib/invoice.js";
-import { aliasKey, aliasLearnable } from "../lib/catalog.js";
+import { editInvoiceLine, invoiceLineTotal, invoiceWarningsKey, lineReview, lineReviewed, toInvoiceLine, validateInvoice } from "../lib/invoice.js";
+import { aliasKey, aliasLearnable, contextualDescription } from "../lib/catalog.js";
 import styles from "./ScanFlow.module.css";
 
 const money = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
@@ -69,7 +69,7 @@ export default function ScanFlow({ items = [] }) {
   const [bill, setBill] = useState({ number: "", date: "" });
   const [lines, setLines] = useState([]);
   const [warnings, setWarnings] = useState([]);
-  const [warningsReviewed, setWarningsReviewed] = useState(false);
+  const [warningsReviewKey, setWarningsReviewKey] = useState(null);
   const [aliasesAvailable, setAliasesAvailable] = useState(false);
   const [saving, setSaving] = useState(false);
   const busy = preparing || stage === "reading" || stage === "matching" || saving;
@@ -88,7 +88,9 @@ export default function ScanFlow({ items = [] }) {
   }, [items]);
   const itemsById = useMemo(() => new Map(items.map((item) => [String(item.id), item])), [items]);
   const total = Math.round(lines.reduce((sum, line) => sum + (invoiceLineTotal(line) ?? 0), 0) * 100) / 100;
-  const unchecked = lines.filter((line) => lineReview(line).required && !line.reviewed).length;
+  const unchecked = lines.filter((line) => lineReview(line).required && !lineReviewed(line)).length;
+  const currentWarningsKey = invoiceWarningsKey({ ocr_text: ocr, lines, warnings });
+  const warningsReviewed = warningsReviewKey === currentWarningsKey;
   const totalsNeedReview = warnings.some((warning) => warning.level === "check");
   const quantities = lines.reduce((map, line) => {
     if (line.item_id) map.set(String(line.item_id), (map.get(String(line.item_id)) || 0) + (Number(line.qty) || 0));
@@ -202,7 +204,7 @@ export default function ScanFlow({ items = [] }) {
       setWarnings(results.flatMap((result, index) => [
         ...(result.warnings ?? []), ...(result.notes ?? []).map((note) => ({ level: "info", message: `Other slip text: ${note}` })),
       ].map((warning) => ({ ...warning, slip: many ? index + 1 : null }))));
-      setWarningsReviewed(false);
+      setWarningsReviewKey(null);
       setAliasesAvailable(results.every((result) => result.aliases_available === true));
       setLines(results.flatMap((result) => result.items).map((line) => {
         const item = itemsById.get(String(line.item_id));
@@ -212,7 +214,7 @@ export default function ScanFlow({ items = [] }) {
           // Missing figures stay empty: they are never filled with 1 or the catalog price.
           qty: line.qty ?? "", unit_price: line.unit_price ?? "", amount: line.amount ?? null,
           confidence: item ? Math.max(0, Math.min(1, Number(line.confidence) || 0)) : 0,
-          description: line.description || "", cells: { sno: line.sno, qty: line.qty_text, rate: line.rate_text, amount: line.amount_text },
+          description: line.description || "", context: line.context || "", cells: { sno: line.sno, qty: line.qty_text, rate: line.rate_text, amount: line.amount_text },
           candidates: Array.isArray(line.candidates) ? line.candidates : [], issues: Array.isArray(line.issues) ? line.issues : [],
           needs_review: Boolean(line.needs_review), reviewed: false, picked: false, remember: false,
         };
@@ -233,7 +235,7 @@ export default function ScanFlow({ items = [] }) {
 
   function updateLine(key, patch) {
     setLines((current) => current.map((line) => line.key === key ? editInvoiceLine(line, patch) : line));
-    if (Object.keys(patch).some((field) => !["reviewed", "remember"].includes(field))) setWarningsReviewed(false);
+    if (Object.keys(patch).some((field) => !["reviewed", "remember"].includes(field))) setWarningsReviewKey(null);
   }
 
   function selectItem(line, value) {
@@ -247,7 +249,7 @@ export default function ScanFlow({ items = [] }) {
     const payload = {
       customer: { name: customer.name.trim(), phone: customer.phone.trim() },
       invoice_no: bill.number.trim(), invoice_date: bill.date, ocr_text: ocr,
-      lines: lines.map(toInvoiceLine), warnings, warnings_reviewed: warningsReviewed,
+      lines: lines.map(toInvoiceLine), warnings, warnings_reviewed: warningsReviewed, warnings_review_key: warningsReviewKey,
     };
     const valid = validateInvoice(payload);
     if (valid.error) { setError(valid.error); return; }
@@ -342,7 +344,7 @@ export default function ScanFlow({ items = [] }) {
               <div className={styles.reviewTitle}><div><span className={styles.eyebrow}>02 / THE RECORD</span><h2 ref={reviewHeading} tabIndex={-1}>Ek baar dekh lijiye.</h2></div><span className="stamp stamp--pending">Review</span></div>
               <p className={styles.note}>{many && `Lines from all ${slips.length} slips are on this one bill. `}Check the matches, especially the amber marks. Every field is yours to correct.</p>
               {warnings.length > 0 && <ul className={styles.slipWarnings} aria-label="Notes about the whole slip">{warnings.map((warning, at) => <li key={at} className={warning.level === "check" ? styles.issueCheck : ""}>{warning.slip && `Slip ${warning.slip}: `}{warning.message}</li>)}</ul>}
-              {totalsNeedReview && <label className={styles.reviewed}><input type="checkbox" checked={warningsReviewed} onChange={(event) => setWarningsReviewed(event.target.checked)} />Checked the slip totals and other figures against the photos</label>}
+              {totalsNeedReview && <label className={styles.reviewed}><input type="checkbox" checked={warningsReviewed} onChange={(event) => setWarningsReviewKey(event.target.checked ? currentWarningsKey : null)} />Checked the slip totals and other figures against the photos</label>}
               {!aliasesAvailable && <p className={styles.note}>Remembering corrected names is currently unavailable. You can still review and save this invoice.</p>}
               <div className={styles.customerFields}>
                 <label className="field">Customer name *<input required autoComplete="name" value={customer.name} onChange={(event) => setCustomer({ ...customer, name: event.target.value })} placeholder="Who is this bill for?" /></label>
@@ -357,7 +359,7 @@ export default function ScanFlow({ items = [] }) {
                     const item = itemsById.get(String(line.item_id));
                     const overStock = item && quantities.get(String(item.id)) > Number(item.stock_qty);
                     const review = lineReview(line);
-                    const flagged = review.required && !line.reviewed;
+                    const flagged = review.required && !lineReviewed(line);
                     const issues = [...line.issues, ...review.messages.map((message) => ({ level: "check", message }))];
                     const cells = line.cells && [line.cells.sno && `#${line.cells.sno}`, `qty “${line.cells.qty || "—"}”`, `rate “${line.cells.rate || "—"}”`, `amount “${line.cells.amount || "—"}”`].filter(Boolean).join(" · ");
                     const computed = (Number(line.qty) || 0) * (Number(line.unit_price) || 0);
@@ -372,18 +374,18 @@ export default function ScanFlow({ items = [] }) {
                       <td><label className={styles.srOnly} htmlFor={`${id}-item-${line.key}`}>Inventory item for line {index + 1}</label><select id={`${id}-item-${line.key}`} className={styles.itemSelect} value={line.item_id ?? ""} onChange={(event) => selectItem(line, event.target.value)}><option value="">Unmatched / custom item</option>{line.candidates?.length > 0 && <optgroup label="Suggested for this line">{line.candidates.map((entry) => <option value={entry.id} key={`s${entry.id}`}>{entry.name} · {entry.unit} · ₹{entry.sell_price}</option>)}</optgroup>}{grouped.map(([category, group]) => <optgroup label={category} key={category}>{group.map((entry) => <option value={entry.id} key={entry.id}>{entry.sku} · {entry.name}</option>)}</optgroup>)}</select>
                         {!item && <input className={styles.customName} aria-label={`Custom item name for line ${index + 1}`} required value={line.name} placeholder="Custom item name" onChange={(event) => updateLine(line.key, { name: event.target.value })} />}
                         <div className={`${styles.confidence} ${line.confidence < 0.6 ? styles.lowConfidence : ""}`}><meter min="0" max="1" low="0.6" optimum="1" value={line.confidence} aria-label={`Match confidence for line ${index + 1}`} /><span>{!item ? "Not matched" : line.picked ? "Chosen by you" : line.confidence < 0.6 ? "Check match" : "Matched"}{item && !line.picked ? ` · ${Math.round(line.confidence * 100)}%` : ""}</span></div>
-                        {aliasesAvailable && item && line.picked && aliasLearnable(aliasKey(line.description)) && <label className={styles.remember}><input type="checkbox" checked={line.remember} onChange={(event) => updateLine(line.key, { remember: event.target.checked })} />Remember “{line.description}” as this item</label>}
+                        {aliasesAvailable && item && line.picked && aliasLearnable(aliasKey(line.description, line.context)) && <label className={styles.remember}><input type="checkbox" checked={line.remember} onChange={(event) => updateLine(line.key, { remember: event.target.checked })} />Remember “{contextualDescription(line.description, line.context)}” as this item</label>}
                         {overStock && <span className={styles.stockWarning}>Only {item.stock_qty} {item.unit} in stock · {quantities.get(String(item.id))} on this bill</span>}
                       </td>
                       <td><input className={styles.numberInput} aria-label={`Quantity for line ${index + 1}`} type="number" min="1" step="1" required value={line.qty} onChange={(event) => updateLine(line.key, { qty: event.target.value })} /></td>
                       <td><input className={styles.rateInput} aria-label={`Rate for line ${index + 1}`} type="number" min="0" step="0.01" required value={line.unit_price} placeholder={item ? `list ${item.sell_price}` : ""} onChange={(event) => updateLine(line.key, { unit_price: event.target.value })} /></td>
                       <td className={`num ${styles.amount}`}><input className={styles.rateInput} aria-label={`Written amount for line ${index + 1}`} type="number" min="0" step="0.01" value={line.amount ?? ""} placeholder="Not written" onChange={(event) => updateLine(line.key, { amount: event.target.value === "" ? null : event.target.value })} /><span className={styles.slipAmount}>Bill: {amount === null ? "—" : money.format(amount)}</span>{offAmount && <span className={styles.issueCheck}>Amount differs from quantity × rate</span>}</td>
-                      <td><button className={styles.remove} type="button" aria-label={`Remove line ${index + 1}`} onClick={() => { setLines((current) => current.filter((entry) => entry.key !== line.key)); setWarningsReviewed(false); }}>×</button></td>
+                      <td><button className={styles.remove} type="button" aria-label={`Remove line ${index + 1}`} onClick={() => { setLines((current) => current.filter((entry) => entry.key !== line.key)); setWarningsReviewKey(null); }}>×</button></td>
                     </tr>
                     {(issues.length > 0 || review.required) && <tr className={`${styles.issueRow} ${flagged ? styles.checkLine : ""}`}>
                       <td colSpan={6}>
                         <ul className={styles.issues} aria-label={`Notes for line ${index + 1}`}>{issues.map((issue, at) => <li key={at} className={issue.level === "check" ? styles.issueCheck : ""}>{issue.message}</li>)}</ul>
-                        {review.required && <label className={styles.reviewed}><input type="checkbox" checked={line.reviewed} onChange={(event) => updateLine(line.key, { reviewed: event.target.checked })} />Checked against the photo</label>}
+                        {review.required && <label className={styles.reviewed}><input type="checkbox" checked={lineReviewed(line)} onChange={(event) => updateLine(line.key, { reviewed: event.target.checked })} />Checked against the photo</label>}
                       </td>
                     </tr>}
                     </Fragment>;
@@ -391,7 +393,7 @@ export default function ScanFlow({ items = [] }) {
                 </table>
                 {!lines.length && <p className={styles.emptyLines}>No lines yet. Add an item to begin the entry.</p>}
               </div>
-              <button type="button" className={`btn btn--ghost ${styles.addLine}`} onClick={() => { setWarningsReviewed(false); setLines((current) => [...current, { key: nextLine.current++, source: "manual", raw: "", item_id: null, name: "", qty: "", unit_price: "", amount: null, confidence: 0, description: "", cells: null, candidates: [], issues: [], needs_review: false, reviewed: false, picked: false, remember: false }]); }}>+ Add a line</button>
+              <button type="button" className={`btn btn--ghost ${styles.addLine}`} onClick={() => { setWarningsReviewKey(null); setLines((current) => [...current, { key: nextLine.current++, source: "manual", raw: "", item_id: null, name: "", qty: "", unit_price: "", amount: null, confidence: 0, description: "", cells: null, candidates: [], issues: [], needs_review: false, reviewed: false, picked: false, remember: false }]); }}>+ Add a line</button>
               <div className={styles.total}><span>Bill total</span><strong>{lines.some((line) => invoiceLineTotal(line) === null) ? "Incomplete" : money.format(total)}</strong></div>
               <div className={styles.saveRow}><p>Saving deducts stock and adds this bill to the customer’s khata.</p><div className={styles.saveActions}>{unchecked > 0 && <span className={styles.issueCheck}>{unchecked} {unchecked === 1 ? "line" : "lines"} to check</span>}<button className="btn btn--red" type="submit" disabled={saving || !lines.length}>{saving ? "Writing in the khata…" : "Save invoice →"}</button></div></div>
             </fieldset>
