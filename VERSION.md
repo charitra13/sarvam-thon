@@ -1,5 +1,17 @@
 # Version history
 
+## 0.6.0
+
+- Separate slip-row extraction from inventory matching. Keep source text and figures, retrieve
+  bounded Hindi/English catalog candidates, and flag ambiguous products and pack variants.
+- Require review of inferred rates, missing figures, edited lines and total discrepancies.
+  Validate entire invoices before saving and preserve written rounding amounts in bills and ledgers.
+- Add optional, explicitly confirmed item aliases behind a separate database migration; keep
+  remembering disabled when its table is absent.
+- Add deterministic regression coverage for captured Ankur Hindi/default-English and Sanjeev
+  OCR, candidate matching, invoice validation and persistence. Other test photos and real-photo
+  product identities still require manual validation.
+
 ## 0.6.0-alpha.1 — unfinished checkpoint
 
 - Draft separate slip-row parsing and bounded catalog candidate matching, with Hindi spelling

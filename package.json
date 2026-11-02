@@ -1,11 +1,12 @@
 {
   "name": "sarvam-thon",
-  "version": "0.6.0-alpha.1",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "test": "bun test",
     "start": "next start",
     "first-call": "bun run first-call.js"
   },
