@@ -127,7 +127,7 @@ export default async function Dashboard() {
               {d.calls.map((c) => (
                 <li key={c.id}>
                   <span className="mono muted">{new Date(c.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</span>
-                  <span>{c.kind === "dispatch" ? "Dispatch update" : "Payment reminder"} to <Link href={`/invoices/${c.invoice_id}`}>{c.customer}</Link></span>
+                  <span>{c.kind === "order" ? "Phone order from" : c.kind === "dispatch" ? "Dispatch update to" : "Payment reminder to"} <Link href={`/invoices/${c.invoice_id}`}>{c.customer}</Link></span>
                   <span className="mono muted">Bill {c.invoice_no || c.invoice_id}</span>
                 </li>
               ))}

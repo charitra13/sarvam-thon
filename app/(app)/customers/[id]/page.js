@@ -46,7 +46,7 @@ export default async function CustomerPage({ params }) {
         </div>
         <div className={styles.footer}>Debit = billed · credit = received · amounts in INR</div>
       </section>
-      {balanceDue > 0 && latestDue && <div className={styles.actions}><CallButton invoiceId={latestDue.id} kind="payment" label="Call for payment" /><span className={styles.subtle}>For {latestDue.invoice_no || `Bill ${latestDue.id}`} · {money(Math.max(0, latestDue.total - latestDue.paid))} due</span></div>}
+      <div className={styles.actions}><CallButton customerId={customer.id} kind="order" label="Call to place order" />{balanceDue > 0 && latestDue && <><CallButton invoiceId={latestDue.id} kind="payment" label="Call for payment" /><span className={styles.subtle}>For {latestDue.invoice_no || `Bill ${latestDue.id}`} · {money(Math.max(0, latestDue.total - latestDue.paid))} due</span></>}</div>
       <PaymentForm customerId={customer.id} due={balanceDue} invoices={customer.invoices} />
       <div className={styles.sectionHead}><h2>Customer’s bills</h2><span className={styles.subtle}>{customer.invoices.length} on record</span></div>
       <section className={`sheet ${styles.registerSheet}`} aria-label="Customer invoices">

@@ -43,6 +43,13 @@
 .replayButton, .doneButton { min-height: 42px; padding: 10px 22px; border: 1px solid #c8a24a66; border-radius: 3px; background: transparent; color: #dfc784; font: 12px var(--font-body, sans-serif); cursor: pointer; }
 .doneButton { background: #c8a24a; color: #14110d; border-color: #c8a24a; }
 .footerNote { color: #a7997e; margin: 23px 0 0; font-size: 9px; line-height: 1.6; }
+.liveDot { background: #e0574b; box-shadow: 0 0 8px #e0574b88; }
+.order { margin: -8px 0 20px; padding: 0; list-style: none; text-align: left; font-size: 13px; line-height: 1.5; }
+.order li { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid #c8a24a26; }
+.order li > span:last-child { flex-shrink: 0; color: #e0c88f; font: 12px var(--font-mono, monospace); }
+.order .orderTotal { border-bottom: 0; color: #f8efdf; font-weight: 600; }
+.orderNote { margin: -8px 0 18px; color: #e3a48f; font-size: 12px; line-height: 1.6; text-align: left; }
+.replayButton:disabled, .doneButton:disabled { opacity: .6; cursor: progress; }
 @keyframes appear { from { opacity: 0; } to { opacity: 1; } }
 @keyframes arrive { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes ring { from { opacity: .8; transform: scale(.86); } to { opacity: 0; transform: scale(1.35); } }

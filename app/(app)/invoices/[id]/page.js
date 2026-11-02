@@ -48,7 +48,7 @@ export default async function InvoicePage({ params }) {
       {due > 0 && <PaymentForm customerId={invoice.customer_id} invoiceId={invoice.id} due={due} />}
       <div className={styles.sectionHead}><h2>Call register</h2><span className={styles.subtle}>{invoice.calls.length} {invoice.calls.length === 1 ? "call" : "calls"} made</span></div>
       <section className={`sheet ${styles.registerSheet}`} aria-label="Call history">
-        {invoice.calls.length ? <ol className={styles.callLog}>{invoice.calls.map((call) => <li key={call.id}><div className={styles.callMeta}><strong>{call.kind === "dispatch" ? "Dispatch update" : "Payment reminder"}</strong><time className={styles.subtle} dateTime={new Date(call.created_at).toISOString()}>{date(call.created_at)} · {time(call.created_at)}</time></div><p>{call.script.length > 260 ? `${call.script.slice(0, 260)}…` : call.script}</p></li>)}</ol> : <div className={styles.empty}><p>No calls yet. Customer se baat baaki hai.</p></div>}
+        {invoice.calls.length ? <ol className={styles.callLog}>{invoice.calls.map((call) => <li key={call.id}><div className={styles.callMeta}><strong>{call.kind === "order" ? "Phone order" : call.kind === "dispatch" ? "Dispatch update" : "Payment reminder"}</strong><time className={styles.subtle} dateTime={new Date(call.created_at).toISOString()}>{date(call.created_at)} · {time(call.created_at)}</time></div><p>{call.script.length > 260 ? `${call.script.slice(0, 260)}…` : call.script}</p></li>)}</ol> : <div className={styles.empty}><p>No calls yet. Customer se baat baaki hai.</p></div>}
       </section>
       {invoice.ocr_text && <details className={styles.disclosure}><summary>Original OCR text</summary><pre className={styles.ocr}>{invoice.ocr_text}</pre></details>}
     </>

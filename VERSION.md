@@ -1,5 +1,9 @@
 # Version history
 
+## 0.4.0
+
+- Add in-app voice ordering with spoken order capture, inventory matching, readback and bill creation.
+
 ## 0.3.0
 
 - Open the hackathon demo directly on the dashboard without login, remove sign-out and session

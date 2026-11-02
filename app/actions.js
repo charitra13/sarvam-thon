@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import * as data from "../lib/data.js";
-import { readSlip, matchSlip, callScript, speak } from "../lib/sarvam.js";
+import { readSlip, matchSlip, callScript, speak, orderGreeting, orderReadback, transcribe, matchOrder } from "../lib/sarvam.js";
 
 // Logs the real error server-side and hands the UI a friendly message.
 async function attempt(message, fn) {
@@ -95,6 +95,50 @@ export async function callAction(invoiceId, kind) {
     await data.logCall({ invoice_id: id, kind, script });
     revalidatePath("/", "layout");
     return { script, audio, customer: invoice.customer, phone: invoice.phone };
+  });
+}
+
+export async function orderGreetingAction(customerId) {
+  const id = toInt(customerId);
+  if (!id) return { error: "Unknown customer." };
+  return attempt("Bulbul could not place the call. Please try again.", async () => {
+    const customer = await data.getCustomer(id);
+    if (!customer) return { error: "Customer not found." };
+    const script = orderGreeting(customer.name);
+    return { script, audio: await speak(script), customer: customer.name, phone: customer.phone };
+  });
+}
+
+export async function takeOrderAction(formData) {
+  const recording = formData.get("audio");
+  if (!(recording instanceof File) || !recording.size) return { error: "Nothing was recorded. Please speak again." };
+  return attempt("Simran could not take the order. Please speak again.", async () => {
+    const transcript = (await transcribe(recording)).slice(0, 2000);
+    const heard = transcript ? await matchOrder(transcript, await data.listItems()) : [];
+    const lines = heard.filter((l) => l.item_id);
+    const missing = heard.filter((l) => !l.item_id && l.said).map((l) => l.said);
+    const script = orderReadback(lines, missing);
+    return { transcript, lines, missing, script, audio: await speak(script) };
+  });
+}
+
+export async function placeOrderAction({ customerId, lines, transcript } = {}) {
+  const customer_id = toInt(customerId);
+  const wanted = (Array.isArray(lines) ? lines : [])
+    .map((l) => ({ item_id: toInt(l?.item_id), qty: toInt(l?.qty) }))
+    .filter((l) => l.item_id && l.qty > 0);
+  if (!customer_id || !wanted.length) return { error: "There is no order to book." };
+  return attempt("Could not book the order. Please try again.", async () => {
+    // Names and prices come from inventory, not from the browser.
+    const items = new Map((await data.listItems()).map((i) => [i.id, i]));
+    if (wanted.some((l) => !items.has(l.item_id))) return { error: "An item in this order is no longer in inventory." };
+    const id = await data.createOrder({
+      customer_id,
+      transcript: String(transcript ?? "").slice(0, 2000),
+      lines: wanted.map(({ item_id, qty }) => ({ item_id, raw_text: null, name: items.get(item_id).name, qty, unit_price: items.get(item_id).sell_price })),
+    });
+    revalidatePath("/", "layout");
+    return { id };
   });
 }
 
