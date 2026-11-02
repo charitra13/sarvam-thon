@@ -1,6 +1,6 @@
 # Version history
 
-## 0.6.0
+## 1.0.0
 
 - Separate slip-row extraction from inventory matching. Keep source text and figures, retrieve
   bounded Hindi/English catalog candidates, and flag ambiguous products and pack variants.
