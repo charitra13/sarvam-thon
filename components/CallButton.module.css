@@ -1,0 +1,52 @@
+.trigger { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.trigger svg { flex-shrink: 0; width: 16px; height: 16px; }
+.backdrop { position: fixed; inset: 0; z-index: 1000; display: flex; justify-content: center; align-items: center; padding: 24px; overflow-y: auto; background: #14110dbd; backdrop-filter: blur(7px); animation: appear .2s ease-out; }
+.phone { position: relative; width: 420px; max-width: 100%; max-height: calc(100dvh - 48px); overflow-y: auto; padding: 22px 30px 20px; border: 1px solid #c8a24a5e; border-radius: 22px; background: #14110d; color: #f2e9d8; box-shadow: 0 30px 100px #0008, inset 0 0 0 5px #ffffff03; font-family: var(--font-body, sans-serif); text-align: center; scrollbar-color: #64563d #14110d; animation: arrive .28s ease-out; }
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 15px; border-bottom: 1px solid #c8a24a26; color: var(--gold, #c8a24a); font: 9px var(--font-mono, monospace); letter-spacing: 1.7px; }
+.close { width: 32px; height: 32px; border: 1px solid #c8a24a40; border-radius: 50%; background: transparent; color: #f2e9d8; cursor: pointer; font: 23px/1 var(--font-body, sans-serif); }
+.phone button:focus-visible { outline: 2px solid #e7c46e; outline-offset: 5px; }
+.purpose { margin: 20px 0 0; color: #e2d6bc; font-size: 12px; }
+.purpose > span { display: block; margin-top: 7px; color: #ae9d7e; font: 8px var(--font-mono, monospace); letter-spacing: 1.5px; }
+.avatarWrap { position: relative; display: grid; place-items: center; width: 112px; height: 112px; margin: 25px auto 17px; }
+.avatar { position: relative; display: grid; place-items: center; width: 82px; height: 82px; border: 1px solid #c8a24a99; border-radius: 50%; color: #e4c36f; background: #2d2619; font: 29px var(--font-display, Georgia, serif); }
+.ringOne, .ringTwo { position: absolute; inset: 6px; border: 1px solid #c8a24a30; border-radius: 50%; }
+.ringTwo { inset: -2px; }
+.ringing .ringOne, .ringing .ringTwo { animation: ring 2.4s ease-out infinite; }
+.ringing .ringTwo { animation-delay: 1.2s; }
+.customer { margin: 0 0 7px; color: #f8efdf; font: 28px/1.3 var(--font-display, Georgia, serif); overflow-wrap: anywhere; }
+.description { margin: 0; color: #bfb196; font: 11px/1.6 var(--font-mono, monospace); overflow-wrap: anywhere; }
+.status { display: flex; justify-content: center; align-items: center; gap: 8px; min-height: 28px; margin-top: 12px; color: #e0c88f; font-size: 12px; }
+.statusDot { width: 5px; height: 5px; border-radius: 50%; background: var(--gold, #c8a24a); }
+.connectedDot { background: #83b889; box-shadow: 0 0 8px #83b88955; }
+.completedTick { color: #83b889; }
+.hinglish { font: 19px var(--font-hand, cursive); }
+.timer { padding-left: 9px; margin-left: 3px; border-left: 1px solid #c8a24a40; color: #cabfa8; font: 11px var(--font-mono, monospace); font-variant-numeric: tabular-nums; }
+.waveform { display: flex; justify-content: center; align-items: center; gap: 4px; height: 62px; margin: 14px auto 2px; }
+.waveform span { height: 4px; width: 3px; border-radius: 4px; background: #c8a24a88; transition: height .25s; }
+.playing span { height: var(--height); background: #dbba67; animation: wave var(--duration) ease-in-out var(--delay) infinite alternate; }
+.voice { margin: 0 0 22px; color: #bfae8b; font: 10px var(--font-mono, monospace); }
+.voice > span:first-child { color: var(--gold, #c8a24a); margin-right: 6px; }
+.voiceDivider { color: #6e6048; margin: 0 5px; }
+.connectingNote { font-size: 12px; line-height: 1.7; color: #c0b397; margin: 20px 0 26px; }
+.connectingNote span { font: 18px var(--font-hand, cursive); color: #d9bd77; }
+.transcript { position: relative; background: #221d15; border: 1px solid #c8a24a30; border-radius: 2px 12px 12px; padding: 16px 18px; margin: 20px 0 24px; text-align: left; }
+.transcriptLabel { display: flex; justify-content: space-between; color: #c8a24a; font: 8px var(--font-mono, monospace); letter-spacing: 1.4px; gap: 12px; }
+.transcriptLabel span { color: #ae9b74; }
+.transcript p { margin: 13px 0 0; font-size: 14px; line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; }
+.playPrompt { padding: 12px; margin: 12px 0 20px; border: 1px dashed #c8a24a50; }
+.playPrompt p { color: #d6c5a2; font-size: 12px; line-height: 1.6; margin: 0 0 12px; }
+.playButton { border: 1px solid var(--gold, #c8a24a); color: #17130d; background: #d6b76d; padding: 12px 20px; border-radius: 3px; font: 600 12px var(--font-body, sans-serif); cursor: pointer; }
+.callControls { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 20px; }
+.endButton { display: flex; flex-direction: column; align-items: center; gap: 9px; border: 0; color: #f2e9d8; background: transparent; cursor: pointer; font: 11px var(--font-body, sans-serif); }
+.hangupIcon { box-sizing: content-box; display: block; width: 23px; height: 23px; padding: 16px; background: #a3201b; border: 1px solid #ce493b; border-radius: 50%; transform: rotate(135deg); box-shadow: 0 4px 15px #0004; }
+.endButton:hover .hangupIcon { background: #bb2923; }
+.replayButton, .doneButton { min-height: 42px; padding: 10px 22px; border: 1px solid #c8a24a66; border-radius: 3px; background: transparent; color: #dfc784; font: 12px var(--font-body, sans-serif); cursor: pointer; }
+.doneButton { background: #c8a24a; color: #14110d; border-color: #c8a24a; }
+.footerNote { color: #a7997e; margin: 23px 0 0; font-size: 9px; line-height: 1.6; }
+@keyframes appear { from { opacity: 0; } to { opacity: 1; } }
+@keyframes arrive { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ring { from { opacity: .8; transform: scale(.86); } to { opacity: 0; transform: scale(1.35); } }
+@keyframes wave { from { transform: scaleY(.25); } to { transform: scaleY(1); } }
+@media (max-width: 480px) { .backdrop { padding: 12px; } .phone { padding: 18px 22px; max-height: calc(100dvh - 24px); border-radius: 18px; } .avatarWrap { margin-top: 22px; } .transcript { padding: 15px; } }
+@media (max-height: 740px) { .avatarWrap { width: 96px; height: 96px; margin: 17px auto 12px; } .avatar { width: 70px; height: 70px; } .purpose { margin-top: 15px; } .waveform { height: 47px; margin-top: 8px; } .voice { margin-bottom: 15px; } .callControls { margin-top: 15px; } }
+@media (prefers-reduced-motion: reduce) { .backdrop, .phone, .ringing .ringOne, .ringing .ringTwo, .playing span { animation: none; } .waveform span { transition: none; } .ringing .ringOne, .ringing .ringTwo { opacity: .6; } .playing span { height: var(--height); } }

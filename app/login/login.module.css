@@ -1,0 +1,44 @@
+.cover {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+  background:
+    repeating-linear-gradient(45deg, rgba(0, 0, 0, .07) 0 2px, transparent 2px 5px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, .035) 0 2px, transparent 2px 5px),
+    radial-gradient(90% 70% at 30% 10%, #B8302A 0%, var(--red) 45%, var(--red-deep) 100%);
+}
+.book {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  align-items: center;
+  gap: clamp(24px, 6vw, 80px);
+  width: min(960px, 100%);
+  padding: clamp(28px, 5vw, 56px);
+  border: 1.5px dashed rgba(241, 213, 138, .45);
+  border-radius: 6px;
+}
+.title { color: var(--gold-hi); animation: rise .7s var(--ease) both; }
+.title h1 { font-size: clamp(3.4rem, 9vw, 6.5rem); line-height: .95; }
+.title p { margin: 14px 0 0; max-width: 22ch; font-family: var(--font-hand), cursive; font-size: 1.35rem; color: rgba(246, 226, 164, .85); }
+.auspice { font-family: var(--font-hand), cursive; letter-spacing: .3em; color: rgba(241, 213, 138, .6); }
+.page {
+  display: grid;
+  gap: 16px;
+  padding: 28px;
+  transform: rotate(1.2deg);
+  background:
+    linear-gradient(90deg, transparent 22px, rgba(163, 32, 27, .45) 22px 23px, transparent 23px),
+    repeating-linear-gradient(180deg, transparent 0 33px, rgba(36, 64, 142, .1) 33px 34px),
+    var(--card);
+  box-shadow: 0 30px 60px -25px rgba(0, 0, 0, .7), 0 2px 0 rgba(0, 0, 0, .2);
+  animation: rise .7s .12s var(--ease) both;
+}
+.page h2 { font-size: 1.8rem; margin-top: -6px; }
+.hint { margin: 0; text-align: center; transform: rotate(-2deg); }
+@media (max-width: 760px) {
+  .book { grid-template-columns: 1fr; text-align: center; }
+  .title p { margin-inline: auto; }
+  .page { transform: none; text-align: left; }
+}

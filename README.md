@@ -1,13 +1,29 @@
-# Sarvam chat
+# Munshi
 
-A minimal JavaScript example that calls Sarvam's `sarvam-105b` chat model with Bun
-and prints the reply. It also accepts a custom prompt as a command-line argument.
+Turns photos of handwritten invoice slips into digital records for a stationery shop, keeps
+inventory and a customer ledger, and makes Hinglish voice calls for dispatch and payment follow-ups.
 
-Requires Bun and a Sarvam account with API credits. Store your key as
-`SARVAM_API_KEY` in a local `.env` file; Bun loads it automatically and Git ignores it.
+## Features
+
+- Slip OCR with Sarvam Vision (Doc AI, handwritten mode)
+- Line items matched to inventory with `sarvam-105b`, then reviewed before saving
+- Saving an invoice lowers stock and adds a debit to the customer's ledger
+- Customer ledger (khata) with payments and a running balance
+- Dispatch and payment calls voiced by Bulbul v4 (`simran_enhi_customer`), played in the browser
+- Demo login: `admin` / `admin`
+
+## Setup
+
+Requires Bun, a Sarvam API key and a Neon Postgres database. Put these in `.env`:
+
+- `SARVAM_API_KEY`
+- `DATABASE_URL` (Neon pooled connection string)
 
 ```sh
 bun install
-bun start
-bun start "Say hello in Hindi."
+bun run dev      # http://localhost:3000
+bun run build
 ```
+
+Tables and demo inventory are created automatically on the first request. On Vercel, set the
+same two environment variables.

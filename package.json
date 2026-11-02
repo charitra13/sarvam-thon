@@ -1,12 +1,21 @@
 {
   "name": "sarvam-thon",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "bun run first-call.js"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "first-call": "bun run first-call.js"
   },
   "dependencies": {
+    "@neon/config": "^1.10.0",
+    "@neon/env": "^1.6.8",
+    "next": "16",
+    "postgres": "^4.0.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "sarvamai": "^1.1.14"
   }
 }

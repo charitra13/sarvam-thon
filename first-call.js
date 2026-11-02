@@ -20,7 +20,7 @@ try {
       content: process.argv.slice(2).join(" ") ||
         "What is the capital of India? Answer in one sentence.",
     }],
-    reasoning_effort: "none",
+    reasoning_effort: null,
     max_tokens: 128,
   });
 
