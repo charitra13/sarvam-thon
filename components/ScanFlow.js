@@ -32,28 +32,45 @@ async function prepareImage(file) {
   }
 }
 
+// Owns one slip's preview URL, so it is freed when that slip is removed.
+function SlipPhoto({ file, alt }) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  // Local object URL; the original photo never goes through image optimization.
+  // eslint-disable-next-line @next/next/no-img-element
+  return src ? <img src={src} alt={alt} className={styles.photo} /> : null;
+}
+
 export default function ScanFlow({ items = [] }) {
   const router = useRouter();
   const id = useId();
   const nextLine = useRef(0);
+  const nextSlip = useRef(0);
   const work = useRef(false);
   const mounted = useRef(true);
   const reviewHeading = useRef(null);
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState("");
+  // Each slip keeps its OCR text and match result, so a retry only redoes the slips that failed.
+  const [slips, setSlips] = useState([]);
+  const [progress, setProgress] = useState(0);
   const [language, setLanguage] = useState("en-IN");
   const [stage, setStage] = useState("upload");
   const [preparing, setPreparing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
   const [failedAt, setFailedAt] = useState(null);
-  const [ocr, setOcr] = useState("");
   const [customer, setCustomer] = useState({ name: "", phone: "" });
   const [bill, setBill] = useState({ number: "", date: "" });
   const [lines, setLines] = useState([]);
   const [saving, setSaving] = useState(false);
   const busy = preparing || stage === "reading" || stage === "matching" || saving;
   const activeStep = stage === "reading" ? 0 : stage === "matching" ? 1 : stage === "review" ? 2 : -1;
+  const many = slips.length > 1;
+  const counter = many && (stage === "reading" || stage === "matching") ? ` (${progress + 1} of ${slips.length})` : "";
+  const ocr = slips.map((slip, index) => slip.text && (many ? `— Slip ${index + 1} —\n${slip.text}` : slip.text)).filter(Boolean).join("\n\n");
   const grouped = useMemo(() => {
     const groups = new Map();
     for (const item of items) {
@@ -76,71 +93,105 @@ export default function ScanFlow({ items = [] }) {
   }, []);
 
   useEffect(() => {
-    if (!file) { setPreview(""); return; }
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-
-  useEffect(() => {
     if (stage === "review") reviewHeading.current?.focus();
   }, [stage]);
 
-  async function chooseFile(input, sample = false) {
+  async function addSlips(files, sample = false) {
     if (work.current) return;
     work.current = true;
     setPreparing(true);
     setError("");
     setFailedAt(null);
+    const failed = [];
     try {
-      let source = input;
+      let sources = files;
       if (sample) {
         const response = await fetch("/sample-slip.png");
         if (!response.ok) throw new Error("sample");
-        source = new File([await response.blob()], "sample-slip.png", { type: "image/png" });
+        sources = [new File([await response.blob()], "sample-slip.png", { type: "image/png" })];
       }
-      const prepared = await prepareImage(source);
+      const added = [];
+      // One photo at a time: decoding several full-size phone photos at once can run a phone out of memory.
+      for (const source of sources) {
+        try {
+          added.push({ key: nextSlip.current++, file: await prepareImage(source), text: "", result: null });
+        } catch {
+          failed.push(source.name || "a photo");
+        }
+      }
       if (!mounted.current) return;
-      setFile(prepared);
-      setStage("upload");
-      setOcr("");
-      setLines([]);
+      if (added.length) {
+        setSlips((current) => [...current, ...added]);
+        setStage("upload");
+        setLines([]);
+      }
+      if (failed.length) throw new Error("image");
     } catch {
       if (mounted.current) setError(sample
         ? "The sample slip couldn’t be loaded. Try again, or choose a photo."
-        : "We couldn’t open this photo. Try a JPG, PNG or WebP image, or take a fresh photo.");
+        : `We couldn’t open ${failed.join(", ") || "this photo"}. Try a JPG, PNG or WebP image, or take a fresh photo.`);
     } finally {
       work.current = false;
       if (mounted.current) setPreparing(false);
     }
   }
 
+  function pick(event) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length) addSlips(files);
+  }
+
+  function removeSlip(key) {
+    if (work.current) return;
+    setSlips((current) => current.filter((slip) => slip.key !== key));
+    setStage("upload");
+    setLines([]);
+    setFailedAt(null);
+    setError("");
+  }
+
   async function scan() {
-    if (!file || work.current) return;
+    if (!slips.length || work.current) return;
     work.current = true;
     setError("");
-    let step = failedAt === "matching" && ocr ? "matching" : "reading";
+    const texts = slips.map((slip) => slip.text);
+    const results = slips.map((slip) => slip.result);
+    const keep = (key, patch) => setSlips((current) => current.map((slip) => slip.key === key ? { ...slip, ...patch } : slip));
+    let step = "reading";
+    let index = 0;
     try {
-      let text = ocr;
-      if (step === "reading") {
+      // Read every slip first, then match each one, so the progress steps only move forward.
+      for (index = 0; index < slips.length; index++) {
+        if (texts[index]) continue;
+        setProgress(index);
         setStage("reading");
         const data = new FormData();
-        data.set("file", file);
+        data.set("file", slips[index].file);
         data.set("language", language);
         const result = await readSlipAction(data);
         if (result?.error || !result?.text?.trim()) throw new Error("read");
         if (!mounted.current) return;
-        text = result.text;
-        setOcr(text);
+        texts[index] = result.text;
+        keep(slips[index].key, { text: result.text });
       }
       step = "matching";
-      setStage("matching");
-      const result = await matchSlipAction(text);
-      if (result?.error || !Array.isArray(result?.items)) throw new Error("match");
-      if (!mounted.current) return;
-      setCustomer({ name: result.customer_name || "", phone: result.customer_phone || "" });
-      setBill({ number: result.invoice_no || "", date: /^\d{4}-\d{2}-\d{2}$/.test(result.invoice_date || "") ? result.invoice_date : "" });
-      setLines(result.items.map((line) => {
+      for (index = 0; index < slips.length; index++) {
+        if (results[index]) continue;
+        setProgress(index);
+        setStage("matching");
+        const result = await matchSlipAction(texts[index]);
+        if (result?.error || !Array.isArray(result?.items)) throw new Error("match");
+        if (!mounted.current) return;
+        results[index] = result;
+        keep(slips[index].key, { result });
+      }
+      // The slips are one customer's bill: the first name, phone and date found win; every bill number and line is kept.
+      const first = (field) => results.find((result) => result[field])?.[field] || "";
+      const date = first("invoice_date");
+      setCustomer({ name: first("customer_name"), phone: first("customer_phone") });
+      setBill({ number: [...new Set(results.map((result) => result.invoice_no).filter(Boolean))].join(", "), date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "" });
+      setLines(results.flatMap((result) => result.items).map((line) => {
         const item = itemsById.get(String(line.item_id));
         return {
           key: nextLine.current++, raw: line.raw || "", item_id: item?.id ?? null,
@@ -155,8 +206,8 @@ export default function ScanFlow({ items = [] }) {
       setFailedAt(step);
       setStage("upload");
       setError(step === "reading"
-        ? "We couldn’t read the slip clearly. Try again, or choose a brighter, sharper photo."
-        : "The slip was read, but inventory matching didn’t finish. Retry matching; your photo and text are safe.");
+        ? `We couldn’t read ${many ? `slip ${index + 1}` : "the slip"} clearly. Try again, or choose a brighter, sharper photo.`
+        : `${many ? `Slip ${index + 1}` : "The slip"} was read, but inventory matching didn’t finish. Retry matching; your ${many ? "photos" : "photo"} and text are safe.`);
     } finally {
       work.current = false;
     }
@@ -216,36 +267,39 @@ export default function ScanFlow({ items = [] }) {
       <div className={`${styles.workspace} ${stage === "review" ? styles.reviewWorkspace : ""}`}>
         <aside className={`${styles.capture} sheet rise`} style={{ "--i": 1 }}>
           <div className={styles.sectionLabel}><span>01 / THE ORIGINAL</span><span className={styles.hand}>Kaagaz se shuru</span></div>
-          {preview ? (
-            <div className={styles.photoArea}>
-              <div className={styles.pin} aria-hidden="true" />
-              {/* Local object URL; the original photo never goes through image optimization. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={preview} alt="Your handwritten invoice slip, ready to read" className={styles.photo} />
-              <p className={styles.fileInfo}>{file?.name} · {Math.round((file?.size || 0) / 1024)} KB</p>
-            </div>
+          {slips.length > 0 ? (
+            <ol className={styles.slips} aria-label="Slips to read">
+              {slips.map((slip, index) => (
+                <li key={slip.key} className={styles.photoArea}>
+                  <div className={styles.pin} aria-hidden="true" />
+                  <SlipPhoto file={slip.file} alt={many ? `Handwritten slip ${index + 1} of ${slips.length}, ready to read` : "Your handwritten invoice slip, ready to read"} />
+                  <p className={styles.fileInfo}>{many && `Slip ${index + 1} · `}{slip.file.name} · {Math.round(slip.file.size / 1024)} KB</p>
+                  <button type="button" className={styles.removeSlip} disabled={busy} aria-label={`Remove slip ${index + 1}`} onClick={() => removeSlip(slip.key)}>×</button>
+                </li>
+              ))}
+            </ol>
           ) : (
-            <label className={`${styles.dropzone} ${dragging ? styles.dragging : ""}`} onDragOver={(event) => { event.preventDefault(); if (!busy) setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); if (!busy && event.dataTransfer.files[0]) chooseFile(event.dataTransfer.files[0]); }}>
+            <label className={`${styles.dropzone} ${dragging ? styles.dragging : ""}`} onDragOver={(event) => { event.preventDefault(); if (!busy) setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); if (!busy && event.dataTransfer.files.length) addSlips(Array.from(event.dataTransfer.files)); }}>
               <span className={styles.slipIcon} aria-hidden="true">≡<span>₹</span></span>
               <strong>A little paper.<br />A lot of hisaab.</strong>
-              <span>Drop a slip here, or choose a photo</span>
-              <span className={styles.fileHint}>JPG, PNG or WebP · resized before upload</span>
-              <input className={styles.fileInput} type="file" accept="image/*" disabled={busy} aria-label="Choose an invoice slip photo" onChange={(event) => { if (event.target.files?.[0]) chooseFile(event.target.files[0]); event.target.value = ""; }} />
+              <span>Drop slips here, or choose photos</span>
+              <span className={styles.fileHint}>One or more slips · JPG, PNG or WebP · resized before upload</span>
+              <input className={styles.fileInput} type="file" accept="image/*" multiple disabled={busy} aria-label="Choose invoice slip photos" onChange={pick} />
             </label>
           )}
           <div className={styles.photoControls}>
-            {preview && <label className={`btn btn--ghost ${styles.fileButton}`}>Change photo<input type="file" accept="image/*" disabled={busy} onChange={(event) => { if (event.target.files?.[0]) chooseFile(event.target.files[0]); event.target.value = ""; }} /></label>}
-            <label className={`btn btn--ghost ${styles.fileButton}`}>Take a photo<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={(event) => { if (event.target.files?.[0]) chooseFile(event.target.files[0]); event.target.value = ""; }} /></label>
-            <button type="button" className={`btn btn--ghost ${styles.sampleButton}`} disabled={busy} onClick={() => chooseFile(null, true)}>Try the sample slip ↗</button>
+            {slips.length > 0 && <label className={`btn btn--ghost ${styles.fileButton}`}>Add more slips<input type="file" accept="image/*" multiple disabled={busy} onChange={pick} /></label>}
+            <label className={`btn btn--ghost ${styles.fileButton}`}>Take a photo<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={pick} /></label>
+            <button type="button" className={`btn btn--ghost ${styles.sampleButton}`} disabled={busy} onClick={() => addSlips([], true)}>Try the sample slip ↗</button>
           </div>
           {preparing && <p className={styles.note} role="status">Preparing your photo…</p>}
           {stage !== "review" && (
             <>
               <fieldset className={styles.languages} disabled={busy}>
                 <legend>What language is the slip in?</legend>
-                {[ ["en-IN", "English"], ["hi-IN", "हिन्दी / Hindi"] ].map(([value, label]) => <label key={value} className={language === value ? styles.selectedLanguage : ""}><input type="radio" name={`${id}-language`} value={value} checked={language === value} onChange={() => { setLanguage(value); setFailedAt(null); }} />{label}</label>)}
+                {[ ["en-IN", "English"], ["hi-IN", "हिन्दी / Hindi"] ].map(([value, label]) => <label key={value} className={language === value ? styles.selectedLanguage : ""}><input type="radio" name={`${id}-language`} value={value} checked={language === value} onChange={() => { setLanguage(value); setFailedAt(null); setSlips((current) => current.map((slip) => ({ ...slip, text: "", result: null }))); }} />{label}</label>)}
               </fieldset>
-              <button type="button" className={`btn btn--red ${styles.readButton}`} disabled={!file || busy} onClick={scan}>{stage === "reading" ? "Reading the slip…" : stage === "matching" ? "Matching inventory…" : failedAt === "matching" ? "Retry inventory matching →" : failedAt ? "Try reading again →" : "Read this slip →"}</button>
+              <button type="button" className={`btn btn--red ${styles.readButton}`} disabled={!slips.length || busy} onClick={scan}>{stage === "reading" ? `Reading ${many ? "slips" : "the slip"}${counter}…` : stage === "matching" ? `Matching inventory${counter}…` : failedAt === "matching" ? "Retry inventory matching →" : failedAt ? "Try reading again →" : many ? `Read these ${slips.length} slips →` : "Read this slip →"}</button>
             </>
           )}
         </aside>
@@ -255,7 +309,7 @@ export default function ScanFlow({ items = [] }) {
             <span className={styles.eyebrow}>THE MUNSHI WAY</span>
             <h2>{stage === "reading" ? "Reading between the lines." : stage === "matching" ? "Finding every item its place." : "Your handwriting.\nOur paperwork."}</h2>
             <p>{stage === "reading" ? "Sarvam Vision is reading the names, quantities and prices on your slip. This usually takes a few seconds." : stage === "matching" ? "Sarvam-105B is matching the slip with your shop’s inventory. You’ll check the details next." : "Photograph the bill. Munshi reads it, finds your stock and gets the entry ready for your final check."}</p>
-            <span className={styles.hand}>{busy ? "Bas, ek pal…" : "Pehle dekho, phir likho."}</span>
+            <span className={styles.hand}>{busy ? `Bas, ek pal…${counter}` : "Pehle dekho, phir likho."}</span>
             {(stage === "reading" || stage === "matching") && <div className={styles.workingRule} aria-hidden="true"><span /></div>}
             <p className={styles.promise}>You review every line before stock and the customer’s khata are updated.</p>
           </section>
@@ -263,7 +317,7 @@ export default function ScanFlow({ items = [] }) {
           <form className={`${styles.review} sheet`} onSubmit={save}>
             <fieldset disabled={saving} className={styles.reviewFields}>
               <div className={styles.reviewTitle}><div><span className={styles.eyebrow}>02 / THE RECORD</span><h2 ref={reviewHeading} tabIndex={-1}>Ek baar dekh lijiye.</h2></div><span className="stamp stamp--pending">Review</span></div>
-              <p className={styles.note}>Check the matches, especially the amber marks. Every field is yours to correct.</p>
+              <p className={styles.note}>{many && `Lines from all ${slips.length} slips are on this one bill. `}Check the matches, especially the amber marks. Every field is yours to correct.</p>
               <div className={styles.customerFields}>
                 <label className="field">Customer name *<input required autoComplete="name" value={customer.name} onChange={(event) => setCustomer({ ...customer, name: event.target.value })} placeholder="Who is this bill for?" /></label>
                 <label className="field">Phone<input type="tel" autoComplete="tel" value={customer.phone} onChange={(event) => setCustomer({ ...customer, phone: event.target.value })} placeholder="e.g. 98765 43210" /></label>

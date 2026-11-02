@@ -7,6 +7,7 @@ inventory and a customer ledger, and makes Hinglish voice calls for dispatch and
 
 - Slip OCR with Sarvam Vision (Doc AI, handwritten mode)
 - Line items matched to inventory with `sarvam-105b`, then reviewed before saving
+- Scan several slips for one customer at once; their lines merge into one invoice
 - Saving an invoice lowers stock and adds a debit to the customer's ledger
 - Customer ledger (khata) with payments and a running balance
 - Dispatch and payment calls voiced by Bulbul v4 (`simran_enhi_customer`), played in the browser

@@ -1,5 +1,11 @@
 # Version history
 
+## 0.4.0
+
+- Scan several slips at once for one customer: choose or drop multiple photos, or add camera shots one
+  by one. Each slip is read and matched in turn, and all lines merge into one invoice for review.
+  A failed slip can be retried without re-reading the others.
+
 ## 0.3.0
 
 - Open the hackathon demo directly on the dashboard without login, remove sign-out and session
